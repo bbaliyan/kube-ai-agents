@@ -31,7 +31,7 @@ The install lists the registration service account of each agent as an owner of 
 2. Set `substrate.s3Endpoint` to your S3 store.
 3. Make the Secret `snapshot-store-keys` in the namespace `ate-system`. It holds the keys `access-key-id` and `secret-access-key` of the store.
 4. For each agent, make its namespace and these Secrets in it: `gitlab-pr-agent` (keys `token` and `WEBHOOK_SECRET`) and, if the model server needs a key, the Secret that `modelApiKeySecret` names.
-5. Add one entry to `agents` for each agent. See `examples/ci-shaped.yaml` and `examples/corp-shaped.yaml`.
+5. Add one entry to `agents` for each agent. See `examples/in-cluster-gitlab.yaml` and `examples/external-gitlab.yaml`.
 
 An agent entry takes `name` and `type`, and every key of `charts/agent/values.yaml` under `agent`. The only type is `pr-agent`. The `atespace` and the `namespace` default to the name. The actor is named `pr-agent` in its atespace, unless you set `actorName`.
 

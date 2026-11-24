@@ -67,20 +67,20 @@ render_chain() { # name, values file
   done
 }
 
-ci="$repo/examples/ci-shaped.yaml"
-corp="$repo/examples/corp-shaped.yaml"
+incluster="$repo/examples/in-cluster-gitlab.yaml"
+external="$repo/examples/external-gitlab.yaml"
 
-# ---- the ci-shaped example: one agent with a webhook, metrics and idle suspend -----------
-render_chain ci "$ci"
-is "the ci-shaped example renders the whole chain" "$?"
-parent="$work/ci/parent.yaml"
+# ---- the in-cluster-gitlab example: one agent with a webhook, metrics and idle suspend -----------
+render_chain incluster "$incluster"
+is "the in-cluster-gitlab example renders the whole chain" "$?"
+parent="$work/incluster/parent.yaml"
 grep -q 'kind: AppProject' "$parent" && grep -q '^  name: ai-agent$' "$parent"
 is "the parent renders the project ai-agent" "$?"
 grep -q 'github.com/bbaliyan/kube-ai-agents' "$parent" && grep -q 'github.com/bbaliyan/kube-agent-substrate' "$parent"
 is "the project allows this repository and the Substrate repository" "$?"
 [ "$(grep -c '^kind: Application' "$parent")" -eq 2 ] && [ "$(grep -c '^  project: ai-agent$' "$parent")" -eq 2 ]
 is "the parent renders the substrate Application and one Application for the one agent, both in the project" "$?"
-! grep -q '^  project: default$' "$work"/ci/*.yaml
+! grep -q '^  project: default$' "$work"/incluster/*.yaml
 is "no Application of the chain uses the default project" "$?"
 grep -A12 '^  destinations:' "$parent" | grep -q 'namespace: pr-agent'
 is "the project allows the namespace of the agent as a destination" "$?"
@@ -89,7 +89,7 @@ is "the project allows the cluster-scoped kinds that the children make" "$?"
 [ "$(wave "$parent" substrate)" = 'sync-wave: "0"' ] && [ "$(wave "$parent" pr-agent)" = 'sync-wave: "1"' ] && [ "$(wave "$parent" ai-agent)" = 'sync-wave: "-1"' ]
 is "the project syncs first, then the control plane, then the agents" "$?"
 
-stack="$work/ci/stack.yaml"
+stack="$work/incluster/stack.yaml"
 [ "$(install_value "$stack" config.ateapi.authz.bootstrapOwners)" = 'system:serviceaccount:ate-system:ate-client,system:serviceaccount:pr-agent:pr-agent-registration' ]
 is "the install owners are the control plane client and the registration account of the agent" "$?" "$(install_value "$stack" config.ateapi.authz.bootstrapOwners)"
 [ "$(install_value "$stack" config.ingressAllowedSPIFFEIDs)" = 'spiffe://cluster.local/ns/pr-agent/sa/pr-agent-webhook' ]
@@ -98,21 +98,21 @@ grep -q 'credentialProvider: .{"name":"k8s.io"}.' "$stack"
 is "the credential provider is on when an agent exists" "$?"
 { wave "$stack" substrate-credential-policy; wave "$stack" substrate-install; wave "$stack" substrate-workers; } | tr '\n' ' ' | grep -q 'sync-wave: "0" sync-wave: "1" sync-wave: "2"'
 is "the stack syncs the credential policy, then the install, then the workers" "$?"
-grep -q 'atespace: reviews' "$work/ci/policy.yaml" && grep -q '  - pr-agent$' "$work/ci/policy.yaml"
+grep -q 'atespace: reviews' "$work/incluster/policy.yaml" && grep -q '  - pr-agent$' "$work/incluster/policy.yaml"
 is "the credential policy allows the namespace of the agent in its atespace" "$?"
-grep -q 'kind: CustomResourceDefinition' "$work/ci/policy.yaml"
+grep -q 'kind: CustomResourceDefinition' "$work/incluster/policy.yaml"
 is "the credential policy chart makes the PodMonitoring CRD stub" "$?"
-out="$(helm template stack "$repo/charts/substrate-stack" -f "$work/ci/stack-values.yaml" --set substrate.install.helmValues.config.ingressAllowedSPIFFEIDs=spiffe://cluster.local/ns/x/sa/y)"
+out="$(helm template stack "$repo/charts/substrate-stack" -f "$work/incluster/stack-values.yaml" --set substrate.install.helmValues.config.ingressAllowedSPIFFEIDs=spiffe://cluster.local/ns/x/sa/y)"
 [ "$(install_value <(printf '%s\n' "$out") config.ingressAllowedSPIFFEIDs)" = 'spiffe://cluster.local/ns/pr-agent/sa/pr-agent-webhook,spiffe://cluster.local/ns/x/sa/y' ]
 is "a consumer allow-list is appended to the shim identities" "$?"
-out="$(helm template stack "$repo/charts/substrate-stack" -f "$work/ci/stack-values.yaml" --set substrate.install.helmValues.postgres.storage=20Gi)"
+out="$(helm template stack "$repo/charts/substrate-stack" -f "$work/incluster/stack-values.yaml" --set substrate.install.helmValues.postgres.storage=20Gi)"
 grep -q 'storage: 20Gi' <<<"$out"
 is "a consumer value overrides an install default" "$?"
 out="$(helm template stack "$repo/charts/substrate-stack")"
 [ "$(install_value <(printf '%s\n' "$out") config.ateapi.authz.bootstrapOwners)" = 'system:serviceaccount:ate-system:ate-client' ] && grep -q 'enabled":false' <<<"$out" && [ -z "$(install_value <(printf '%s\n' "$out") config.ingressAllowedSPIFFEIDs)" ]
 is "with no agent the install has no agent owner, no credential provider and no allow-list" "$?"
 
-agent="$work/ci/pr-agent.yaml"
+agent="$work/incluster/pr-agent.yaml"
 for suffix in actor registration idle-suspend webhook metrics; do
   grep -q "^  name: pr-agent-$suffix\$" "$agent" || report "the agent chart renders the Application pr-agent-$suffix" "missing"
 done
@@ -135,29 +135,29 @@ is "within an agent the actor syncs first, then the registration, then idle susp
 application "$agent" pr-agent-webhook | grep -q 'name: pr-agent-webhook$' && application "$agent" pr-agent-webhook | grep -q 'path: charts/pr-agent-webhook'
 is "the webhook shim is named <agent>-webhook" "$?"
 
-# ---- the corp-shaped example: two agents, https and a model key ---------------------------
-render_chain corp "$corp"
-is "the corp-shaped example renders the whole chain, with https addresses" "$?"
-parent="$work/corp/parent.yaml"
+# ---- the external-gitlab example: two agents, https and a model key ---------------------------
+render_chain external "$external"
+is "the external-gitlab example renders the whole chain, with https addresses" "$?"
+parent="$work/external/parent.yaml"
 [ "$(grep -c '^kind: Application' "$parent")" -eq 3 ]
 is "the parent renders one Application for each of the two agents, and the control plane" "$?"
-[ -z "$({ app_names "$work/corp/reviewer.yaml"; app_names "$work/corp/reviewer-docs.yaml"; app_names "$parent"; } | sort | uniq -d)" ]
+[ -z "$({ app_names "$work/external/reviewer.yaml"; app_names "$work/external/reviewer-docs.yaml"; app_names "$parent"; } | sort | uniq -d)" ]
 is "no Application name repeats across the agents" "$?"
-owners="$(install_value "$work/corp/stack.yaml" config.ateapi.authz.bootstrapOwners)"
+owners="$(install_value "$work/external/stack.yaml" config.ateapi.authz.bootstrapOwners)"
 grep -q 'system:serviceaccount:reviewer:reviewer-registration' <<<"$owners" && grep -q 'system:serviceaccount:reviewer-docs-agent:reviewer-docs-registration' <<<"$owners"
 is "the install owners list the registration account of both agents" "$?" "$owners"
-[ "$(install_value "$work/corp/stack.yaml" config.ingressAllowedSPIFFEIDs)" = 'spiffe://cluster.local/ns/reviewer/sa/reviewer-webhook' ]
+[ "$(install_value "$work/external/stack.yaml" config.ingressAllowedSPIFFEIDs)" = 'spiffe://cluster.local/ns/reviewer/sa/reviewer-webhook' ]
 is "only the agent with a webhook is on the router allow-list" "$?"
-grep -q 'atespace: reviewer-docs' "$work/corp/policy.yaml" && grep -q '  - reviewer-docs-agent$' "$work/corp/policy.yaml"
+grep -q 'atespace: reviewer-docs' "$work/external/policy.yaml" && grep -q '  - reviewer-docs-agent$' "$work/external/policy.yaml"
 is "the credential policy has one entry for each agent, and the atespace defaults to the name" "$?"
-grep -q 'egressTrustBundle: true' "$work/corp/reviewer.yaml" && grep -q 'ate-secret://k8s.io/default/reviewer/model-key/api-key' "$work/corp/reviewer.yaml"
+grep -q 'egressTrustBundle: true' "$work/external/reviewer.yaml" && grep -q 'ate-secret://k8s.io/default/reviewer/model-key/api-key' "$work/external/reviewer.yaml"
 is "the https agent trusts the egress CA and sends the model key from its Secret" "$?"
-! grep -q 'name: reviewer-idle-suspend' "$work/corp/reviewer.yaml" && ! grep -q 'name: reviewer-docs-metrics' "$work/corp/reviewer-docs.yaml" && ! grep -q 'name: reviewer-docs-webhook' "$work/corp/reviewer-docs.yaml"
+! grep -q 'name: reviewer-idle-suspend' "$work/external/reviewer.yaml" && ! grep -q 'name: reviewer-docs-metrics' "$work/external/reviewer-docs.yaml" && ! grep -q 'name: reviewer-docs-webhook' "$work/external/reviewer-docs.yaml"
 is "idle suspend, metrics and the shim are off unless an agent sets them" "$?"
 
 two_idle="$work/two-idle.yaml"
 {
-  sed '/^agents:/,$d' "$ci"
+  sed '/^agents:/,$d' "$incluster"
   cat <<'YAML'
 agents:
   - {name: first, type: pr-agent, modelEndpoint: "http://model.example.test:11434", gitlabUrl: "http://gitlab.example.test", idleSuspend: {enabled: true, prometheusUrl: "http://prometheus.example.test:9090"}}
@@ -173,7 +173,7 @@ is "only the first agent with idle suspend owns the PodMonitors" "$?"
 # ---- what the parent refuses ----------------------------------------------------------
 refuse() { # name, expected error text, the agents block
   local file="$work/refuse.yaml" out
-  { sed '/^agents:/,$d' "$ci"; printf '%s\n' "$3"; } >"$file"
+  { sed '/^agents:/,$d' "$incluster"; printf '%s\n' "$3"; } >"$file"
   out="$(ai_agent -f "$file" 2>&1)"
   [ $? -ne 0 ] && grep -q "$2" <<<"$out"
   is "$1" "$?" "$out"
