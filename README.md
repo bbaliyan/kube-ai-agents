@@ -49,6 +49,10 @@ For an agent named `reviewer`, the Applications are `reviewer`, `reviewer-actor`
 
 The metrics collector uses fixed resource names in its namespace, so each agent needs its own namespace.
 
+## Removing an agent
+
+Remove its entry from `agents`. Each Application of the agent has the resources finalizer, so Argo CD deletes the Applications and what they made. It does not delete the namespace of the agent (the consumer owns it). It does not unregister the actor or the atespace in Agent Substrate, because the control plane has no step for that yet.
+
 ## PodMonitors
 
 When an agent turns on idle suspend, the `substrate-stack` chart makes one Application, `substrate-monitors`. It renders the PodMonitors of the control plane, so no agent owns them. Set the label that Prometheus selects them by in `substrate.podMonitorLabels`.

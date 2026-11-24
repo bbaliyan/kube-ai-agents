@@ -5,6 +5,9 @@ kind: Application
 metadata:
   name: {{ $a.name }}-webhook
   namespace: argocd
+  finalizers:
+    # Deleting the Application deletes what it made. Without it, removing an agent leaves its children behind.
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     # After the install, whose router allow-list names the shim. With the actor that the shim calls.
     argocd.argoproj.io/sync-wave: "0"

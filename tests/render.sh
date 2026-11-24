@@ -47,7 +47,7 @@ for doc in yaml.safe_load_all(open(sys.argv[1])):
 PY
 }
 app_names() { grep -A3 '^kind: Application' "$1" | grep -E '^  name: ' | sed 's/^  name: //'; }
-wave() { grep -A6 "^  name: $2\$" "$1" | grep -o 'sync-wave: "[-0-9]*"'; }
+wave() { grep -A10 "^  name: $2$" "$1" | grep -o 'sync-wave: "[-0-9]*"'; }
 # The lines of one Application, from its name to the next document.
 application() { awk -v name="$2" '$0 == "  name: " name {on = 1} on && /^---/ {exit} on' "$1"; }
 
@@ -120,6 +120,8 @@ done
 is "the agent chart renders five Applications with unique names" "$?"
 [ "$(grep -c '^  project: ai-agent$' "$agent")" -eq 5 ]
 is "every child Application uses the project ai-agent" "$?"
+[ "$(grep -c 'resources-finalizer.argocd.argoproj.io' "$agent")" -eq 5 ] && application "$parent" pr-agent | grep -q 'resources-finalizer.argocd.argoproj.io'
+is "every agent Application deletes what it made when it is removed" "$?"
 for suffix in actor registration idle-suspend webhook metrics; do
   grep -q "releaseName: pr-agent-$suffix\$" "$agent" || report "the Application pr-agent-$suffix sets its release name" "missing"
 done

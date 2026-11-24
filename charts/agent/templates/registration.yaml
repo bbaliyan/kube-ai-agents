@@ -6,6 +6,9 @@ kind: Application
 metadata:
   name: {{ $a.name }}-registration
   namespace: argocd
+  finalizers:
+    # Deleting the Application deletes what it made. Without it, removing an agent leaves its children behind.
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     # After the actor. The registration Job reads the ConfigMaps that the actor chart renders.
     argocd.argoproj.io/sync-wave: "1"
