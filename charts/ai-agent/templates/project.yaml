@@ -1,0 +1,31 @@
+{{- $agents := include "ai-agent.agents" . | fromJsonArray }}
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: ai-agent
+  namespace: argocd
+  annotations:
+    # Before every Application that uses it.
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: AI agents on Agent Substrate
+  sourceRepos:
+    - {{ .Values.self.repoURL | quote }}
+    {{- if ne .Values.self.repoURL .Values.substrate.repoURL }}
+    - {{ .Values.substrate.repoURL | quote }}
+    {{- end }}
+  destinations:
+    {{- $namespaces := list "argocd" .Values.substrate.namespace }}
+    {{- range $agents }}{{ $namespaces = append $namespaces .namespace }}{{ end }}
+    {{- range $namespaces | uniq }}
+    - server: https://kubernetes.default.svc
+      namespace: {{ . }}
+    {{- end }}
+  clusterResourceWhitelist:
+    {{- range .Values.clusterResources }}
+    - group: {{ .group | quote }}
+      kind: {{ .kind }}
+    {{- end }}
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

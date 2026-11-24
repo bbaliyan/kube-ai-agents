@@ -1,0 +1,30 @@
+# Two agents. GitLab and the model server use https, so the egress gateway CA must be trusted.
+# The model server needs a key, which the egress proxy sends from a Secret. Every host name is an example.
+substrate:
+  s3Endpoint: https://s3.example.test
+  bucket: agent-snapshots
+  nodeSelector:
+    example.test/node-group: agents
+
+agents:
+  - name: reviewer
+    type: pr-agent
+    model: openai/example-model
+    modelEndpoint: https://model.example.test/v1
+    modelApiKeySecret:
+      name: model-key
+      key: api-key
+    gitlabUrl: https://gitlab.example.test
+    egressTrustBundle: true
+    webhook:
+      port: 8080
+  - name: reviewer-docs
+    type: pr-agent
+    namespace: reviewer-docs-agent
+    model: openai/example-model
+    modelEndpoint: https://model.example.test/v1
+    modelApiKeySecret:
+      name: model-key
+      key: api-key
+    gitlabUrl: https://gitlab.example.test
+    egressTrustBundle: true

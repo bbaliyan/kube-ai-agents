@@ -1,0 +1,38 @@
+{{- $podMonitorOwner := "" }}
+{{- range include "ai-agent.agents" . | fromJsonArray }}
+{{- if and (not $podMonitorOwner) (dig "idleSuspend" "enabled" false .) }}{{ $podMonitorOwner = .name }}{{ end }}
+{{- end }}
+{{- range include "ai-agent.agents" . | fromJsonArray }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .name }}
+  namespace: argocd
+  annotations:
+    # After the control plane.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: ai-agent
+  source:
+    repoURL: {{ $.Values.self.repoURL | quote }}
+    targetRevision: {{ $.Values.self.revision | quote }}
+    path: charts/agent
+    helm:
+      releaseName: {{ .name }}
+      valuesObject:
+        podMonitorOwner: {{ eq .name $podMonitorOwner }}
+        self:
+          {{- toYaml $.Values.self | nindent 10 }}
+        substrate:
+          {{- toYaml (pick $.Values.substrate "repoURL" "revision" "namespace" "bucket" "nodeSelector") | nindent 10 }}
+        agent:
+          {{- toYaml . | nindent 10 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+{{- end }}

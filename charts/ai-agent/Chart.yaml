@@ -1,0 +1,5 @@
+apiVersion: v2
+name: ai-agent
+description: AI agents on Agent Substrate - an Argo CD project, the shared control plane and one Application for each agent
+type: application
+version: 0.1.0
