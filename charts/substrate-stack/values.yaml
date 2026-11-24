@@ -1,0 +1,32 @@
+# The chart ai-agent renders one release of this chart and fills these values.
+
+self:
+  repoURL: https://github.com/bbaliyan/kube-ai-agents
+  revision: main
+
+substrate:
+  # The charts and the install image come from kube-agent-substrate. Pin a commit.
+  repoURL: https://github.com/bbaliyan/kube-agent-substrate
+  revision: ""
+  installImageDigest: ""
+  namespace: ate-system
+  bucket: substrate-snapshots
+  # The S3 endpoint of the snapshot store. The consumer sets it. The Secret snapshot-store-keys in the namespace
+  # of the control plane holds its keys (access-key-id and secret-access-key). The consumer makes it.
+  s3Endpoint: ""
+  # Any fixed level works. Keep it the same on every node.
+  selinuxLevel: "s0:c100,c200"
+  nodeSelector: {}
+  # Makes the stub of the GKE PodMonitoring CRD. A cluster without the GKE operator needs it.
+  podMonitoringCrdStub: true
+  install:
+    helmValues: {}
+  # The gVisor worker pool. A worker must be larger than the actor it runs.
+  workers:
+    replicas: 2
+    cpu: "2"
+    memory: 4Gi
+    helmValues: {}
+
+# One entry for each agent: name, namespace, atespace and webhook (true when the agent has a webhook shim).
+agents: []
