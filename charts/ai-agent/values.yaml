@@ -45,3 +45,5 @@ clusterResources:
   - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding}
   - {group: admissionregistration.k8s.io, kind: MutatingAdmissionPolicy}
   - {group: admissionregistration.k8s.io, kind: MutatingAdmissionPolicyBinding}
+  # The install makes a Bundle of the egress CA when substrate.install.helmValues.egress.trustedCaPem is set.
+  - {group: trust.cert-manager.io, kind: Bundle}

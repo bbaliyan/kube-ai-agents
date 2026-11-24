@@ -192,6 +192,11 @@ refuse "two agents in one namespace fail" 'two agents use the namespace' "agents
 refuse "two actors with one name in one atespace fail" 'two agents use the actor' "agents:
   - {name: one, type: pr-agent, atespace: shared, $addresses}
   - {name: two, type: pr-agent, atespace: shared, $addresses}"
+refuse "an agent named like another agent plus a suffix fails" 'would make an Application named' "agents:
+  - {name: rev, type: pr-agent, $addresses}
+  - {name: rev-actor, type: pr-agent, $addresses}"
+refuse "an agent named substrate fails" 'would make an Application named' "agents:
+  - {name: substrate, type: pr-agent, $addresses}"
 refuse "an agent name that is not a DNS label fails" 'name' "agents:
   - {name: Bad_Name, type: pr-agent, $addresses}"
 

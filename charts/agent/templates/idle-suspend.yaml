@@ -25,7 +25,7 @@ spec:
           "substrate" (dict "namespace" .Values.substrate.namespace)
           "image" (dict "digest" $a.registration.digest)
           "nodeSelector" .Values.substrate.nodeSelector -}}
-        {{- /* The chart cannot render PodMonitors without an actor, and the control plane needs them once. The first agent with idle suspend owns them (cloud-hub#302 asks upstream for a release without actors). */ -}}
+        {{- /* The chart cannot render PodMonitors without an actor, and the control plane needs them once. The first agent with idle suspend owns them (the idle suspend chart of Agent Substrate should render them without an actor). */ -}}
         {{- if .Values.podMonitorOwner }}
         {{- $_ := set $idle "podMonitors" (dict "enabled" true "labels" $a.idleSuspend.podMonitorLabels) -}}
         {{- end }}

@@ -23,6 +23,8 @@ Every child Application uses the project `ai-agent`. The project allows this rep
 2. The Application `substrate` syncs next (wave 0). Inside it, the credential policy comes first, then the install, then the workers.
 3. One Application for each agent syncs last (wave 1). Inside it, the actor, the shim and the collector come first, then the registration, then idle suspend.
 
+Argo CD does not assess the health of a child Application unless the platform has a health rule for the Application kind. Without that rule, a wave only sets the order of creation and does not wait for the previous wave to be ready. The charts work either way, but a strict order needs the rule.
+
 The install lists the registration service account of each agent as an owner of the control plane. The router allow-list holds the shim of each agent that has a webhook. The chart builds both lists from `agents`, so you do not write them.
 
 ## Use it
@@ -49,7 +51,7 @@ The metrics collector uses fixed resource names in its namespace, so each agent 
 
 ## Known gap: PodMonitors
 
-The Prometheus scrape objects for the control plane (PodMonitors) come from the idle suspend chart of Agent Substrate. That chart cannot render them without an actor. So the first agent that turns on idle suspend owns them. If you remove that agent, the PodMonitors go with it. Another agent takes them over at the next sync. The upstream fix is tracked in the planning hub as cloud-hub#302.
+The Prometheus scrape objects for the control plane (PodMonitors) come from the idle suspend chart of Agent Substrate. That chart cannot render them without an actor. So the first agent that turns on idle suspend owns them. If you remove that agent, the PodMonitors go with it. Another agent takes them over at the next sync. The fix belongs in the idle suspend chart of Agent Substrate, which should be able to render the PodMonitors without an actor.
 
 ## Tests
 
@@ -64,3 +66,8 @@ make test-commit
 - `make test-scripts` runs `tests/render.sh`. It renders the parent, the stack and each agent for both examples, and it checks the failures.
 
 The charts are not applied to a cluster by these checks.
+
+## Limits
+
+- The project `ai-agent` allows a ClusterRoleBinding, because the install binds a cluster role. Any source that the project allows can therefore escalate. Allow only repositories that you trust.
+- The credential policy is read once, when the credential provider starts. If you add an agent after the first install, restart the credential provider so that it reads the new entry.
