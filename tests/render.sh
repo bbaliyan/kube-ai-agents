@@ -273,6 +273,12 @@ grep -q 'issuer: https://gitlab.example.test' <<<"$out" && grep -q 'jwksUri: htt
 is "the pipeline route values pass through in full, with no defaulting" "$?" "$out"
 ! grep -q 'accessBindings' <<<"$(agent_chart --show-only templates/registration.yaml)"
 is "the registration has no access binding when idle suspend is off" "$?"
+out="$(agent_chart --show-only templates/registration.yaml)"
+! grep -q 'unregister' <<<"$out"
+is "the registration has no unregister value by default, so an older registration chart still renders" "$?"
+out="$(agent_chart --set agent.registration.unregister=true --show-only templates/registration.yaml)"
+grep -A1 'unregister:' <<<"$out" | grep -q 'enabled: true'
+is "agent.registration.unregister turns on unregister.enabled in the registration chart" "$?" "$out"
 
 # ---- the shim chart takes the name that the parent gives it ----------------------------------
 out="$(helm template s "$repo/charts/pr-agent-webhook" --set name=a-webhook --set actor.name=pr-agent)"

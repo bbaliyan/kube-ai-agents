@@ -10,7 +10,7 @@ self:
 substrate:
   # The charts and the install image come from kube-agent-substrate. Pin a commit.
   repoURL: https://github.com/bbaliyan/kube-agent-substrate
-  revision: 0797c20f6b8a83bf99aec74ac8e4edee19b13c5e
+  revision: f16fbbc2f73f61b9008a97e13135866876041a67
   # The digest of the install image. The images are unchanged since the commit that made them.
   installImageDigest: sha256:bb22f587e788390cdc84d1c7d3bef79dec25ef00fa11a8daf84b7a6c5fec7b56
   namespace: ate-system

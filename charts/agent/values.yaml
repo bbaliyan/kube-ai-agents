@@ -82,6 +82,9 @@ agent:
   registration:
     # The digest of the registration image: kubectl-ate, jq, curl and bash. Idle suspend uses the same image.
     digest: sha256:34ab2c208629bc6f225cc9576cfa17169b547c04752444ba0c33a62f0eef1971
+    # When the agent is removed, delete its actor, its templates and its atespace (if empty) in Agent Substrate.
+    # It sets unregister.enabled of the registration chart, which needs a revision of that chart that has the value.
+    unregister: false
     helmValues: {}
   # Suspends the actor after it has been idle. The registration Job grants the CronJob the editor role in the
   # atespace. It reads Prometheus, which must scrape the control plane (the substrate stack makes the PodMonitors).
