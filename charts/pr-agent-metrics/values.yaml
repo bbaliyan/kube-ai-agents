@@ -1,0 +1,51 @@
+# The collector takes the OTLP metrics of pr-agent on one port, checks a bearer token, keeps only the pr_agent.*
+# metrics and serves them to Prometheus on another port. The egress gateway of Substrate adds the token for the
+# actor, so the actor never holds it. Prometheus is never exposed to the actor.
+
+# renovate: datasource=docker depName=otel/opentelemetry-collector-contrib versioning=docker
+image: otel/opentelemetry-collector-contrib:0.165.0@sha256:e40d61f10c9a617cca1ffd1be4d7e2b3a4b0f0001798ff07e58cabe82e618cea
+
+# The Secret and the key that hold the token. The collector reads the token from it, and the egress proxy of
+# Substrate sends it for the actor. With generateToken the chart makes the Secret with a random token, once, inside
+# the cluster (External Secrets, Password generator), and the key is `password`. Without it, you make the Secret.
+secret:
+  name: pr-agent-metrics
+  key: password
+generateToken: true
+
+# The OTLP/HTTP port and the port that Prometheus scrapes.
+otlpPort: 4318
+metricsPort: 9464
+
+# How long a metric stays on the scrape page after its last push. It must be longer than the longest idle time of
+# the actor. Counters of an idle actor then stay flat, and rate() reads zero.
+metricExpiration: 24h
+
+# Who may reach the OTLP port: the pods that call it. The default is the egress gateway of Substrate.
+allowOtlpFrom:
+  - namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: ate-system
+    podSelector:
+      matchLabels:
+        app: atenet-egress
+# Who may reach the scrape port. The default is Prometheus.
+allowScrapeFrom:
+  - namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: prometheus
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: prometheus
+
+# The ServiceMonitor for Prometheus. sampleLimit caps the series that one scrape may add.
+serviceMonitor:
+  enabled: true
+  sampleLimit: 2000
+  # The labels the Prometheus of the cluster selects monitors by (kube-prometheus-stack: its release name).
+  labels: {release: prometheus}
+
+resources:
+  requests: {cpu: 20m, memory: 64Mi}
+  limits: {memory: 192Mi}
+nodeSelector: {}

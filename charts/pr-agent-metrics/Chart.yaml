@@ -1,0 +1,5 @@
+apiVersion: v2
+name: pr-agent-metrics
+description: An OpenTelemetry collector for the metrics of pr-agent - it takes OTLP over HTTP with a bearer token and serves the metrics to Prometheus
+type: application
+version: 0.1.0

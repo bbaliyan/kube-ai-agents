@@ -1,0 +1,46 @@
+{{- $name := "pr-agent-metrics" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  labels: {app.kubernetes.io/name: {{ $name }}}
+data:
+  config.yaml: |
+    extensions:
+      bearertokenauth:
+        filename: /secrets/token
+      health_check:
+        endpoint: 0.0.0.0:13133
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:{{ .Values.otlpPort }}
+            auth:
+              authenticator: bearertokenauth
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 128
+      # Keep only the metrics of pr-agent. A client that holds the token cannot add other series.
+      filter/pr_agent:
+        metrics:
+          metric:
+            - 'not IsMatch(name, "^pr_agent[.]")'
+    exporters:
+      prometheus:
+        endpoint: 0.0.0.0:{{ .Values.metricsPort }}
+        metric_expiration: {{ .Values.metricExpiration }}
+      # pr-agent sends traces with the metrics. Nothing stores them, so they end here.
+      nop:
+    service:
+      extensions: [bearertokenauth, health_check]
+      pipelines:
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, filter/pr_agent]
+          exporters: [prometheus]
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter]
+          exporters: [nop]
