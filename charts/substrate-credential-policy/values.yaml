@@ -1,0 +1,13 @@
+# The namespace of the control plane.
+controlPlaneNamespace: ate-system
+
+# The credential provider reads a Secret only in a namespace that the atespace of the actor may use. The install
+# makes this policy empty, and only when it is missing, so it is made here, before the install. The provider reads
+# it once at start. One entry for each agent.
+agents: []
+#  - atespace: reviews
+#    namespace: pr-agent
+
+# A stub of the GKE PodMonitoring CRD. The base manifests of Substrate hold a PodMonitoring object, and ate-setup
+# refuses to apply them without the CRD. A cluster without the GKE operator needs the stub (upstream issue #2589).
+podMonitoringCrdStub: true
