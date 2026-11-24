@@ -32,6 +32,10 @@ spec:
         {{- /* The idle suspend CronJob runs as <name>-idle-suspend, the service account that its Application sets. */ -}}
         {{- $_ := set $registration "accessBindings" (list (dict "atespace" $a.atespace "role" "editor" "members" (list (printf "user:system:serviceaccount:%s:%s-idle-suspend" $a.namespace $a.name)))) -}}
         {{- end }}
+        {{- if $a.registration.unregister -}}
+        {{- /* Sent only when on: a revision of the registration chart from before the value has a strict schema. */ -}}
+        {{- $_ := set $registration "unregister" (dict "enabled" true) -}}
+        {{- end }}
         {{- mergeOverwrite $registration $a.registration.helmValues | toYaml | nindent 8 }}
   destination:
     server: https://kubernetes.default.svc
