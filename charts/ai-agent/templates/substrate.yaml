@@ -24,6 +24,7 @@ spec:
             namespace: {{ .namespace }}
             atespace: {{ .atespace }}
             webhook: {{ not (empty .webhook) }}
+            idleSuspend: {{ dig "idleSuspend" "enabled" false . }}
           {{- end }}
   destination:
     server: https://kubernetes.default.svc

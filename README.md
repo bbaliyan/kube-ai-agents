@@ -49,9 +49,9 @@ For an agent named `reviewer`, the Applications are `reviewer`, `reviewer-actor`
 
 The metrics collector uses fixed resource names in its namespace, so each agent needs its own namespace.
 
-## Known gap: PodMonitors
+## PodMonitors
 
-The Prometheus scrape objects for the control plane (PodMonitors) come from the idle suspend chart of Agent Substrate. That chart cannot render them without an actor. So the first agent that turns on idle suspend owns them. If you remove that agent, the PodMonitors go with it. Another agent takes them over at the next sync. The fix belongs in the idle suspend chart of Agent Substrate, which should be able to render the PodMonitors without an actor.
+When an agent turns on idle suspend, the `substrate-stack` chart makes one Application, `substrate-monitors`. It renders the PodMonitors of the control plane, so no agent owns them. Set the label that Prometheus selects them by in `substrate.podMonitorLabels`.
 
 ## Tests
 

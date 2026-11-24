@@ -25,10 +25,6 @@ spec:
           "substrate" (dict "namespace" .Values.substrate.namespace)
           "image" (dict "digest" $a.registration.digest)
           "nodeSelector" .Values.substrate.nodeSelector -}}
-        {{- /* The chart cannot render PodMonitors without an actor, and the control plane needs them once. The first agent with idle suspend owns them (the idle suspend chart of Agent Substrate should render them without an actor). */ -}}
-        {{- if .Values.podMonitorOwner }}
-        {{- $_ := set $idle "podMonitors" (dict "enabled" true "labels" $a.idleSuspend.podMonitorLabels) -}}
-        {{- end }}
         {{- mergeOverwrite $idle $a.idleSuspend.helmValues | toYaml | nindent 8 }}
   destination:
     server: https://kubernetes.default.svc

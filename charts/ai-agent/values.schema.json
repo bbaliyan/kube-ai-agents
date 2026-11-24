@@ -41,6 +41,7 @@
         "selinuxLevel": { "type": "string" },
         "nodeSelector": { "type": "object", "additionalProperties": { "type": "string" } },
         "podMonitoringCrdStub": { "type": "boolean" },
+        "podMonitorLabels": { "type": "object", "additionalProperties": { "type": "string" } },
         "install": { "type": "object" },
         "workers": { "type": "object" }
       }

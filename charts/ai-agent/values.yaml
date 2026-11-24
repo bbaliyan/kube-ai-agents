@@ -10,7 +10,7 @@ self:
 substrate:
   # The charts and the install image come from kube-agent-substrate. Pin a commit.
   repoURL: https://github.com/bbaliyan/kube-agent-substrate
-  revision: 88e4dfea6471d6971c60118c80b740a8f2557621
+  revision: 0797c20f6b8a83bf99aec74ac8e4edee19b13c5e
   # The digest of the install image. The images are unchanged since the commit that made them.
   installImageDigest: sha256:bb22f587e788390cdc84d1c7d3bef79dec25ef00fa11a8daf84b7a6c5fec7b56
   namespace: ate-system
@@ -22,6 +22,9 @@ substrate:
   nodeSelector: {}
   # Makes the stub of the GKE PodMonitoring CRD. A cluster without the GKE operator needs it.
   podMonitoringCrdStub: true
+  # The label that Prometheus selects PodMonitors by. The stack makes the PodMonitors of the control plane when an agent turns on idle suspend.
+  podMonitorLabels:
+    release: prometheus
   install:
     helmValues: {}
   # The gVisor worker pool. Each worker pod needs its cpu and memory free on a node. The chart sets the limits
