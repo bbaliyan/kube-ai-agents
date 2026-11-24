@@ -127,8 +127,8 @@ application "$agent" pr-agent-registration | grep -q 'name: pr-agent-registratio
 is "the registration service account is <agent>-registration" "$?"
 application "$agent" pr-agent-registration | grep -q 'user:system:serviceaccount:pr-agent:pr-agent-idle-suspend'
 is "the registration grants the idle suspend account the editor role" "$?"
-application "$agent" pr-agent-idle-suspend | grep -q 'name: pr-agent-idle-suspend$' && application "$agent" pr-agent-idle-suspend | grep -q 'podMonitors:'
-is "idle suspend sets its service account and, as the owner, the PodMonitors" "$?"
+application "$agent" pr-agent-idle-suspend | grep -q 'name: pr-agent-idle-suspend$' && ! application "$agent" pr-agent-idle-suspend | grep -q 'podMonitors:'
+is "idle suspend sets its service account and leaves the PodMonitors to the stack" "$?"
 { wave "$agent" pr-agent-actor; wave "$agent" pr-agent-webhook; wave "$agent" pr-agent-metrics; } | sort -u | grep -qx 'sync-wave: "0"' \
   && [ "$(wave "$agent" pr-agent-registration)" = 'sync-wave: "1"' ] && [ "$(wave "$agent" pr-agent-idle-suspend)" = 'sync-wave: "2"' ]
 is "within an agent the actor syncs first, then the registration, then idle suspend" "$?"
@@ -166,9 +166,11 @@ YAML
 } >"$two_idle"
 render_chain two "$two_idle"
 is "two agents with idle suspend render" "$?"
-grep -q 'podMonitorOwner: true' "$work/two/first-values.yaml" && grep -q 'podMonitorOwner: false' "$work/two/second-values.yaml" \
-  && grep -q 'podMonitors:' "$work/two/first.yaml" && ! grep -q 'podMonitors:' "$work/two/second.yaml"
-is "only the first agent with idle suspend owns the PodMonitors" "$?"
+[ "$(app_names "$work/two/stack.yaml" | grep -cx 'substrate-monitors')" -eq 1 ] && application "$work/two/stack.yaml" substrate-monitors | grep -q 'enabled: true' \
+  && application "$work/two/stack.yaml" substrate-monitors | grep -q 'release: prometheus' && ! grep -q 'podMonitors:' "$work/two/first.yaml" "$work/two/second.yaml"
+is "the stack makes one monitors Application for any number of agents with idle suspend" "$?"
+! app_names "$work/external/stack.yaml" | grep -qx 'substrate-monitors'
+is "the stack makes no monitors Application when no agent has idle suspend" "$?"
 
 # ---- what the parent refuses ----------------------------------------------------------
 refuse() { # name, expected error text, the agents block

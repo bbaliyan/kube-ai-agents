@@ -1,9 +1,6 @@
 # The chart ai-agent renders one release of this chart for each agent and fills these values.
 # Render it by hand only for a test.
 
-# True for the agent that owns the PodMonitors of the control plane. The parent chart sets it.
-podMonitorOwner: false
-
 self:
   repoURL: https://github.com/bbaliyan/kube-ai-agents
   revision: main
@@ -87,13 +84,10 @@ agent:
     digest: sha256:34ab2c208629bc6f225cc9576cfa17169b547c04752444ba0c33a62f0eef1971
     helmValues: {}
   # Suspends the actor after it has been idle. The registration Job grants the CronJob the editor role in the
-  # atespace. It reads Prometheus, which must scrape the control plane (see podMonitorLabels).
+  # atespace. It reads Prometheus, which must scrape the control plane (the substrate stack makes the PodMonitors).
   idleSuspend:
     enabled: false
     prometheusUrl: ""
-    # The label that the Prometheus selects PodMonitors by.
-    podMonitorLabels:
-      release: prometheus
     idleMinutes: 10
     schedule: "*/1 * * * *"
     helmValues: {}

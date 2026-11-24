@@ -1,7 +1,3 @@
-{{- $podMonitorOwner := "" }}
-{{- range include "ai-agent.agents" . | fromJsonArray }}
-{{- if and (not $podMonitorOwner) (dig "idleSuspend" "enabled" false .) }}{{ $podMonitorOwner = .name }}{{ end }}
-{{- end }}
 {{- range include "ai-agent.agents" . | fromJsonArray }}
 ---
 apiVersion: argoproj.io/v1alpha1
@@ -21,7 +17,6 @@ spec:
     helm:
       releaseName: {{ .name }}
       valuesObject:
-        podMonitorOwner: {{ eq .name $podMonitorOwner }}
         self:
           {{- toYaml $.Values.self | nindent 10 }}
         substrate:

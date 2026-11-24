@@ -19,6 +19,9 @@ substrate:
   nodeSelector: {}
   # Makes the stub of the GKE PodMonitoring CRD. A cluster without the GKE operator needs it.
   podMonitoringCrdStub: true
+  # The label that Prometheus selects PodMonitors by.
+  podMonitorLabels:
+    release: prometheus
   install:
     helmValues: {}
   # The gVisor worker pool. A worker must be larger than the actor it runs.
