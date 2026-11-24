@@ -1,0 +1,99 @@
+# The chart ai-agent renders one release of this chart for each agent and fills these values.
+# Render it by hand only for a test.
+
+# True for the agent that owns the PodMonitors of the control plane. The parent chart sets it.
+podMonitorOwner: false
+
+self:
+  repoURL: https://github.com/bbaliyan/kube-ai-agents
+  revision: main
+
+# The charts of Agent Substrate and the shared control plane.
+substrate:
+  repoURL: https://github.com/bbaliyan/kube-agent-substrate
+  revision: ""
+  namespace: ate-system
+  bucket: substrate-snapshots
+  nodeSelector: {}
+
+agent:
+  # The name of the agent. It is the name of its Applications and of its service accounts. The parent sets it.
+  name: ""
+  # The only type today.
+  type: pr-agent
+  # The atespace and the namespace of the actor. The parent defaults both to the name of the agent.
+  # The namespace holds the Secrets of the actor: gitlab-pr-agent (keys token and WEBHOOK_SECRET) and the key
+  # Secret of the model server. The consumer makes the namespace and the Secrets. The credential provider may
+  # read Secrets of this namespace only. Do not use a namespace of Substrate.
+  atespace: ""
+  namespace: ""
+  # The name of the actor inside the atespace.
+  actorName: pr-agent
+  # The gitlab_webhook image of pr-agent. Pin the tag and the digest. The actor replaces the CMD of the image to keep
+  # GitLab page links on gitlabUrl (templates/_helpers.tpl). If a new release changes the CMD, change it there.
+  # renovate: datasource=docker depName=pragent/pr-agent versioning=docker
+  image: pragent/pr-agent:0.50.0-gitlab_webhook@sha256:dd10e3f8f5079b42e54e46c231932d28d5d48084337998e04fe7acf667d70840
+  # The model, as the model name of pr-agent: a provider prefix and a name. The prefix must be ollama or openai
+  # (the latter for any server with an OpenAI-compatible API).
+  model: ollama/qwen3-coder:30b
+  # The base URL of the model server. Use a DNS name, not an IP address. Empty fails the render.
+  modelEndpoint: ""
+  # Optional. A Secret in `namespace` that holds the key of the model server: {name: ..., key: ...}. The egress
+  # proxy sends it as a bearer token, so the actor never holds it. Leave it empty for a server with no login.
+  modelApiKeySecret: {}
+  # Optional. The OTLP/HTTP base URL of a collector that receives the metrics of pr-agent. Empty turns metrics off,
+  # unless metricsCollector.enabled is true: then it is the collector of this repository. pr-agent also sends traces to
+  # <endpoint>/v1/traces, so the collector must accept them. Do not point it at Prometheus: the egress policy
+  # matches the host and port, not the path, so the actor would reach the whole Prometheus.
+  metricsEndpoint: ""
+  # Optional. A Secret in `namespace` that holds the bearer token of the collector: {name: ..., key: ...}. Leave it
+  # empty with metricsCollector.enabled: the chart then makes the Secret `pr-agent-metrics` with a random token.
+  metricsApiKeySecret: {}
+  # Runs the collector (charts/pr-agent-metrics) in `namespace`. helmValues overrides the values of that chart.
+  metricsCollector:
+    enabled: false
+    helmValues: {}
+  metricsEnvironment: production
+  # The context length of the model server, in tokens. It must equal the setting on the server.
+  contextLength: 16000
+  # pr-agent appends a run details section to each comment: the model, the tokens, the time and the model calls.
+  runDetails: true
+  # When whole files do not fit the context, the review is split into chunks, one model call each, and the results
+  # are merged. maxReviewCalls caps the calls of one review. Keep it near 20: the calls of one merge request event
+  # must stay under the request rate of the model server. Set largeReviews to false to review only what fits in one call.
+  largeReviews: true
+  maxReviewCalls: 20
+  # The seconds that pr-agent waits for one model call before it retries.
+  modelTimeoutSeconds: 600
+  # The GitLab address that the actor uses. The egress policy allows its host and sets the token there.
+  gitlabUrl: ""
+  # More GitLab addresses that the actor may call, with the same token. An https address needs egressTrustBundle.
+  gitlabExtraUrls: []
+  # The webhook shim sends this fixed value in X-Gitlab-Token. The actor expects the same value. It is public and
+  # is not the webhook secret.
+  hopToken: internal-hop-from-the-webhook-shim
+  # Mounts the CA of the egress gateway into the actor. An https gitlabUrl or modelEndpoint needs it.
+  egressTrustBundle: false
+  cpuMillicores: 1000
+  memoryBytes: 2147483648
+  # The webhook shim, the chart charts/pr-agent-webhook. Empty means no shim. The keys are values of that chart,
+  # for example port, allowFrom and ingressRoute. {port: 8080} turns it on with the defaults. The consumer
+  # passes the pipeline route (webhook.pipeline) in full: issuer, jwksUri and namespacePaths.
+  webhook: {}
+  # Extra values for the actor chart, which the registration chart does not read.
+  actorHelmValues: {}
+  registration:
+    # The digest of the registration image: kubectl-ate, jq, curl and bash. Idle suspend uses the same image.
+    digest: sha256:34ab2c208629bc6f225cc9576cfa17169b547c04752444ba0c33a62f0eef1971
+    helmValues: {}
+  # Suspends the actor after it has been idle. The registration Job grants the CronJob the editor role in the
+  # atespace. It reads Prometheus, which must scrape the control plane (see podMonitorLabels).
+  idleSuspend:
+    enabled: false
+    prometheusUrl: ""
+    # The label that the Prometheus selects PodMonitors by.
+    podMonitorLabels:
+      release: prometheus
+    idleMinutes: 10
+    schedule: "*/1 * * * *"
+    helmValues: {}

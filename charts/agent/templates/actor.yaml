@@ -1,0 +1,33 @@
+{{- $a := .Values.agent }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $a.name }}-actor
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: ai-agent
+  source:
+    repoURL: {{ .Values.substrate.repoURL | quote }}
+    targetRevision: {{ .Values.substrate.revision | quote }}
+    path: charts/substrate-actor
+    helm:
+      releaseName: {{ $a.name }}-actor
+      valuesObject:
+        {{- $actors := dict
+          "snapshotStorageLocation" (printf "objectstore://%s" .Values.substrate.bucket)
+          "actors" (include "agent.actors" . | fromJsonArray) -}}
+        {{- mergeOverwrite $actors $a.actorHelmValues | toYaml | nindent 8 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $a.namespace }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 2m
+        maxDuration: 10m

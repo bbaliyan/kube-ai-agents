@@ -1,0 +1,44 @@
+{{- $a := .Values.agent }}
+# The install lists system:serviceaccount:<namespace>:<name>-registration as an owner of the control plane.
+# The service account name below gives the Job that identity.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $a.name }}-registration
+  namespace: argocd
+  annotations:
+    # After the actor. The registration Job reads the ConfigMaps that the actor chart renders.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: ai-agent
+  source:
+    repoURL: {{ .Values.substrate.repoURL | quote }}
+    targetRevision: {{ .Values.substrate.revision | quote }}
+    path: charts/substrate-registration
+    helm:
+      releaseName: {{ $a.name }}-registration
+      valuesObject:
+        {{- $registration := dict
+          "snapshotStorageLocation" (printf "objectstore://%s" .Values.substrate.bucket)
+          "actors" (include "agent.actors" . | fromJsonArray)
+          "substrate" (dict "namespace" .Values.substrate.namespace)
+          "serviceAccount" (dict "name" (printf "%s-registration" $a.name))
+          "image" (dict "digest" $a.registration.digest)
+          "nodeSelector" .Values.substrate.nodeSelector -}}
+        {{- if $a.idleSuspend.enabled -}}
+        {{- /* The idle suspend CronJob runs as <name>-idle-suspend, the service account that its Application sets. */ -}}
+        {{- $_ := set $registration "accessBindings" (list (dict "atespace" $a.atespace "role" "editor" "members" (list (printf "user:system:serviceaccount:%s:%s-idle-suspend" $a.namespace $a.name)))) -}}
+        {{- end }}
+        {{- mergeOverwrite $registration $a.registration.helmValues | toYaml | nindent 8 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $a.namespace }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 2m
+        maxDuration: 10m

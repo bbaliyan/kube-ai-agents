@@ -1,0 +1,34 @@
+{{- $a := .Values.agent }}
+{{- if $a.webhook }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $a.name }}-webhook
+  namespace: argocd
+  annotations:
+    # After the install, whose router allow-list names the shim. With the actor that the shim calls.
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: ai-agent
+  source:
+    repoURL: {{ .Values.self.repoURL | quote }}
+    targetRevision: {{ .Values.self.revision | quote }}
+    path: charts/pr-agent-webhook
+    helm:
+      releaseName: {{ $a.name }}-webhook
+      valuesObject:
+        {{- /* The name, the actor and the hop token come last, so the shim always sends what the actor expects. The router allow-list names the service account <name>-webhook. */ -}}
+        {{- mergeOverwrite (deepCopy $a.webhook) (dict "name" (printf "%s-webhook" $a.name) "actor" (dict "atespace" $a.atespace "name" $a.actorName) "hopToken" $a.hopToken) | toYaml | nindent 8 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $a.namespace }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 2m
+        maxDuration: 10m
+{{- end }}
