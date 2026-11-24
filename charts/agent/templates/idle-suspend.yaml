@@ -1,0 +1,45 @@
+{{- $a := .Values.agent }}
+{{- if $a.idleSuspend.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $a.name }}-idle-suspend
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: ai-agent
+  source:
+    repoURL: {{ .Values.substrate.repoURL | quote }}
+    targetRevision: {{ .Values.substrate.revision | quote }}
+    path: charts/substrate-idle-suspend
+    helm:
+      releaseName: {{ $a.name }}-idle-suspend
+      valuesObject:
+        {{- $idle := dict
+          "actors" (list (dict "atespace" $a.atespace "name" $a.actorName))
+          "idleMinutes" $a.idleSuspend.idleMinutes
+          "schedule" $a.idleSuspend.schedule
+          "prometheus" (dict "url" (required "agent.idleSuspend.prometheusUrl is required when idle suspend is enabled" $a.idleSuspend.prometheusUrl))
+          "serviceAccount" (dict "name" (printf "%s-idle-suspend" $a.name))
+          "substrate" (dict "namespace" .Values.substrate.namespace)
+          "image" (dict "digest" $a.registration.digest)
+          "nodeSelector" .Values.substrate.nodeSelector -}}
+        {{- /* The chart cannot render PodMonitors without an actor, and the control plane needs them once. The first agent with idle suspend owns them (the idle suspend chart of Agent Substrate should render them without an actor). */ -}}
+        {{- if .Values.podMonitorOwner }}
+        {{- $_ := set $idle "podMonitors" (dict "enabled" true "labels" $a.idleSuspend.podMonitorLabels) -}}
+        {{- end }}
+        {{- mergeOverwrite $idle $a.idleSuspend.helmValues | toYaml | nindent 8 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $a.namespace }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 2m
+        maxDuration: 10m
+{{- end }}

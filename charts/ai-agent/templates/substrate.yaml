@@ -1,0 +1,34 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: substrate
+  namespace: argocd
+  annotations:
+    # Before the agents: they register with the control plane.
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: ai-agent
+  source:
+    repoURL: {{ .Values.self.repoURL | quote }}
+    targetRevision: {{ .Values.self.revision | quote }}
+    path: charts/substrate-stack
+    helm:
+      valuesObject:
+        self:
+          {{- toYaml .Values.self | nindent 10 }}
+        substrate:
+          {{- toYaml .Values.substrate | nindent 10 }}
+        agents:
+          {{- range include "ai-agent.agents" . | fromJsonArray }}
+          - name: {{ .name }}
+            namespace: {{ .namespace }}
+            atespace: {{ .atespace }}
+            webhook: {{ not (empty .webhook) }}
+          {{- end }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

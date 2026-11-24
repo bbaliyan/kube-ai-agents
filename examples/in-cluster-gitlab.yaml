@@ -1,0 +1,31 @@
+# One agent that reviews merge requests of an in-cluster GitLab with a model on the local network.
+# Every host name is an example. The consumer sets its own.
+substrate:
+  s3Endpoint: http://s3.example.test:9000
+  nodeSelector:
+    example.test/node-group: general
+
+agents:
+  - name: pr-agent
+    type: pr-agent
+    atespace: reviews
+    namespace: pr-agent
+    model: ollama/example-model:30b
+    modelEndpoint: http://model.example.test:11434
+    gitlabUrl: http://gitlab.example.test
+    webhook:
+      port: 8080
+      allowFrom:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gitlab
+      pipeline:
+        enabled: true
+        issuer: https://gitlab.example.test
+        jwksUri: http://gitlab.example.test/oauth/discovery/keys
+        namespacePaths: [mirror]
+    metricsCollector:
+      enabled: true
+    idleSuspend:
+      enabled: true
+      prometheusUrl: http://prometheus.example.test:9090

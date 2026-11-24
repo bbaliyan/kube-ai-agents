@@ -1,0 +1,30 @@
+{{- if .Values.generateToken }}
+# The token is made once, inside the cluster. Nobody types it or sees it. The generator writes the key `password`.
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: {{ .Values.secret.name }}
+spec:
+  length: 48
+  digits: 8
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .Values.secret.name }}
+spec:
+  # CreatedOnce: a later sync does not change the token, so the actor and the collector keep agreeing.
+  refreshPolicy: CreatedOnce
+  target:
+    name: {{ .Values.secret.name }}
+    creationPolicy: Owner
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: {{ .Values.secret.name }}
+{{- end }}

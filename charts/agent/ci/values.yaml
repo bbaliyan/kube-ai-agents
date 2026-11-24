@@ -1,0 +1,10 @@
+# The smallest set of values that renders. The chart ai-agent fills them in a real release.
+substrate:
+  revision: 88e4dfea6471d6971c60118c80b740a8f2557621
+agent:
+  name: pr-agent
+  type: pr-agent
+  atespace: reviews
+  namespace: pr-agent
+  modelEndpoint: http://model.example.test:11434
+  gitlabUrl: http://gitlab.example.test

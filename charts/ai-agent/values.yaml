@@ -1,0 +1,49 @@
+# This chart renders Argo CD objects. The consumer points one Application at it and overrides these values.
+# The values that name an environment are empty: the consumer sets them.
+
+# Where the charts of this repository come from.
+self:
+  repoURL: https://github.com/bbaliyan/kube-ai-agents
+  revision: main
+
+# The shared control plane. It is one for all agents.
+substrate:
+  # The charts and the install image come from kube-agent-substrate. Pin a commit.
+  repoURL: https://github.com/bbaliyan/kube-agent-substrate
+  revision: 88e4dfea6471d6971c60118c80b740a8f2557621
+  # The digest of the install image. The images are unchanged since the commit that made them.
+  installImageDigest: sha256:bb22f587e788390cdc84d1c7d3bef79dec25ef00fa11a8daf84b7a6c5fec7b56
+  namespace: ate-system
+  bucket: substrate-snapshots
+  # The S3 endpoint of the snapshot store, for example http://s3.example.test:9000. The consumer sets it.
+  s3Endpoint: ""
+  # Any fixed level works. Keep it the same on every node.
+  selinuxLevel: "s0:c100,c200"
+  nodeSelector: {}
+  # Makes the stub of the GKE PodMonitoring CRD. A cluster without the GKE operator needs it.
+  podMonitoringCrdStub: true
+  install:
+    helmValues: {}
+  # The gVisor worker pool. Each worker pod needs its cpu and memory free on a node. The chart sets the limits
+  # equal to the requests. A worker must be larger than the actor it runs: an actor with the limits of
+  # cpuMillicores and memoryBytes does not fit on a worker of the same size.
+  workers:
+    replicas: 2
+    cpu: "2"
+    memory: 4Gi
+    helmValues: {}
+
+# One entry for each agent. The keys are the values of the chart agent (charts/agent/values.yaml, key `agent`),
+# plus name and type. The atespace and the namespace default to the name.
+agents: []
+
+# The cluster-scoped kinds that the child charts make, so that the Argo CD project allows them and no more.
+# The install Job makes the rest of the control plane itself, outside Argo CD.
+clusterResources:
+  - {group: "", kind: Namespace}
+  - {group: apiextensions.k8s.io, kind: CustomResourceDefinition}
+  - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding}
+  - {group: admissionregistration.k8s.io, kind: MutatingAdmissionPolicy}
+  - {group: admissionregistration.k8s.io, kind: MutatingAdmissionPolicyBinding}
+  # The install makes a Bundle of the egress CA when substrate.install.helmValues.egress.trustedCaPem is set.
+  - {group: trust.cert-manager.io, kind: Bundle}

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: substrate-stack
+description: The shared Agent Substrate control plane as Argo CD Applications - the credential policy, the install and the workers
+type: application
+version: 0.1.0

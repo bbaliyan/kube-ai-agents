@@ -1,0 +1,35 @@
+{{- $a := .Values.agent }}
+{{- if $a.metricsCollector.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $a.name }}-metrics
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: ai-agent
+  source:
+    repoURL: {{ .Values.self.repoURL | quote }}
+    targetRevision: {{ .Values.self.revision | quote }}
+    path: charts/pr-agent-metrics
+    helm:
+      releaseName: {{ $a.name }}-metrics
+      valuesObject:
+        {{- $given := $a.metricsApiKeySecret -}}
+        {{- $secret := dict "generateToken" (not $given) "secret" (dict "name" (default "pr-agent-metrics" $given.name) "key" (default "password" $given.key)) -}}
+        {{- mergeOverwrite (deepCopy $a.metricsCollector.helmValues) $secret | toYaml | nindent 8 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $a.namespace }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # The ServiceMonitor CRD comes from the platform, which may still be starting.
+    retry:
+      limit: 10
+      backoff:
+        duration: 1m
+        maxDuration: 10m
+{{- end }}

@@ -1,0 +1,50 @@
+suite: credential policy
+templates:
+  - templates/credential-policy.yaml
+  - templates/podmonitoring-crd.yaml
+tests:
+  - it: renders no policy without agents
+    template: templates/credential-policy.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: allows the namespace of each agent in its atespace
+    template: templates/credential-policy.yaml
+    set:
+      agents:
+        - {atespace: reviews, namespace: pr-agent}
+        - {atespace: triage, namespace: triage-agent}
+    asserts:
+      - equal:
+          path: metadata.namespace
+          value: ate-system
+      - matchRegex:
+          path: data["namespace-policy.yaml"]
+          pattern: "atespace: reviews\n  allowedNamespaces:\n  - pr-agent\n"
+      - matchRegex:
+          path: data["namespace-policy.yaml"]
+          pattern: "atespace: triage\n  allowedNamespaces:\n  - triage-agent\n"
+
+  - it: lists the namespaces of two agents that share an atespace under one entry
+    template: templates/credential-policy.yaml
+    set:
+      agents:
+        - {atespace: reviews, namespace: b-agent}
+        - {atespace: reviews, namespace: a-agent}
+    asserts:
+      - matchRegex:
+          path: data["namespace-policy.yaml"]
+          pattern: "atespace: reviews\n  allowedNamespaces:\n  - a-agent\n  - b-agent\n"
+
+  - it: renders the PodMonitoring CRD stub by default and can drop it
+    template: templates/podmonitoring-crd.yaml
+    asserts:
+      - containsDocument: {kind: CustomResourceDefinition, apiVersion: apiextensions.k8s.io/v1, name: podmonitorings.monitoring.googleapis.com}
+  - it: renders no stub when it is off
+    template: templates/podmonitoring-crd.yaml
+    set:
+      podMonitoringCrdStub: false
+    asserts:
+      - hasDocuments:
+          count: 0

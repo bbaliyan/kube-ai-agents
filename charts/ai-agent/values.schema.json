@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["self", "substrate", "agents"],
+  "definitions": {
+    "dnsLabel": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 40 },
+    "repo": {
+      "type": "object",
+      "required": ["repoURL", "revision"],
+      "properties": {
+        "repoURL": { "type": "string", "pattern": "^https://" },
+        "revision": { "type": "string", "minLength": 1 }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "$ref": "#/definitions/dnsLabel" },
+        "type": { "enum": ["pr-agent"], "description": "The only type today." },
+        "atespace": { "$ref": "#/definitions/dnsLabel" },
+        "namespace": { "$ref": "#/definitions/dnsLabel" },
+        "actorName": { "$ref": "#/definitions/dnsLabel" }
+      }
+    }
+  },
+  "properties": {
+    "self": { "$ref": "#/definitions/repo" },
+    "substrate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repoURL", "revision", "installImageDigest", "namespace", "bucket"],
+      "properties": {
+        "repoURL": { "type": "string", "pattern": "^https://" },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$", "description": "A full commit hash: the charts and the install image must agree." },
+        "installImageDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "namespace": { "enum": ["ate-system"], "description": "Upstream installs only there." },
+        "bucket": { "type": "string", "minLength": 3 },
+        "s3Endpoint": { "type": "string" },
+        "selinuxLevel": { "type": "string" },
+        "nodeSelector": { "type": "object", "additionalProperties": { "type": "string" } },
+        "podMonitoringCrdStub": { "type": "boolean" },
+        "install": { "type": "object" },
+        "workers": { "type": "object" }
+      }
+    },
+    "agents": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/agent" }
+    },
+    "clusterResources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["group", "kind"],
+        "properties": { "group": { "type": "string" }, "kind": { "type": "string" } }
+      }
+    }
+  }
+}
