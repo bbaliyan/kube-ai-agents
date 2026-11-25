@@ -53,6 +53,10 @@ agent:
   metricsCollector:
     enabled: false
     helmValues: {}
+  # Optional. A simple Grafana dashboard of this agent, `Agent: <name>`, from the chart pr-agent-metrics. It needs
+  # metricsCollector.enabled and a Grafana sidecar that loads ConfigMaps with the label grafana_dashboard.
+  dashboard:
+    enabled: false
   metricsEnvironment: production
   # The context length of the model server, in tokens. It must equal the setting on the server.
   contextLength: 16000

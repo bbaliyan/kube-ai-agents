@@ -1,0 +1,47 @@
+suite: pr-agent-metrics dashboard
+templates:
+  - templates/dashboard.yaml
+tests:
+  - it: renders nothing by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders a labelled ConfigMap when it is on
+    set:
+      dashboard: {enabled: true, name: reviewer, actor: reviews/pr-agent}
+    release:
+      name: reviewer-metrics
+    asserts:
+      - hasDocuments:
+          count: 1
+      - containsDocument: {kind: ConfigMap, apiVersion: v1, name: reviewer-metrics-dashboard}
+      - equal:
+          path: metadata.labels.grafana_dashboard
+          value: "1"
+      - matchRegex:
+          path: data["dashboard.json"]
+          pattern: '"uid": "ai-agent-reviewer"'
+      - matchRegex:
+          path: data["dashboard.json"]
+          pattern: '"title": "Agent: reviewer"'
+      - matchRegex:
+          path: data["dashboard.json"]
+          pattern: 'ate_actor=\\"reviews/pr-agent\\"'
+      - notMatchRegex:
+          path: data["dashboard.json"]
+          pattern: '__NAME__|__ACTOR__'
+
+  - it: fails without a name when it is on
+    set:
+      dashboard: {enabled: true, actor: reviews/pr-agent}
+    asserts:
+      - failedTemplate:
+          errorPattern: dashboard.name is required
+
+  - it: fails without an actor when it is on
+    set:
+      dashboard: {enabled: true, name: reviewer}
+    asserts:
+      - failedTemplate:
+          errorPattern: dashboard.actor is required

@@ -1,4 +1,5 @@
 {{- $a := .Values.agent }}
+{{- if and $a.dashboard.enabled (not $a.metricsCollector.enabled) }}{{ fail "agent.dashboard.enabled needs agent.metricsCollector.enabled: the dashboard reads the metrics of the collector" }}{{ end }}
 {{- if $a.metricsCollector.enabled }}
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -21,7 +22,8 @@ spec:
       valuesObject:
         {{- $given := $a.metricsApiKeySecret -}}
         {{- $secret := dict "generateToken" (not $given) "secret" (dict "name" (default "pr-agent-metrics" $given.name) "key" (default "password" $given.key)) -}}
-        {{- mergeOverwrite (deepCopy $a.metricsCollector.helmValues) $secret | toYaml | nindent 8 }}
+        {{- $dashboard := dict "dashboard" (dict "enabled" $a.dashboard.enabled "name" $a.name "actor" (printf "%s/%s" $a.atespace $a.actorName)) -}}
+        {{- mergeOverwrite (deepCopy $a.metricsCollector.helmValues) $secret $dashboard | toYaml | nindent 8 }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ $a.namespace }}
