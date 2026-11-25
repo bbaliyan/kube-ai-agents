@@ -65,7 +65,7 @@ fallbackModels: [ollama/qwen3:8b]
 
 ## Many reviews at once
 
-pr-agent runs each command as a task on the event loop of a worker process, with no queue and no limit. A worker also does some blocking GitLab calls on that loop, so one busy worker answers new webhook calls slowly, and GitLab gives up on a call after 10 seconds. To handle more reviews at once, run more worker processes: set `workers` on the agent (default 2) and give the actor the size for them with `cpuMillicores` and `memoryBytes`. Start with about 1 CPU and 1 GiB for each worker, and make the worker pool of Agent Substrate (`substrate.workers.cpu` and `memory`) about twice the size of the actor. The metrics carry the id of the worker, so the workers do not overwrite each other (see "Reporting a running command").
+pr-agent runs each command as a task on the event loop of a worker process, with no queue and no limit. A worker also does some blocking GitLab calls on that loop, so one busy worker answers new webhook calls slowly, and GitLab gives up on a call after 10 seconds. To handle more reviews at once, run more worker processes. pr-agent counts them from the CPUs of the actor, so size the actor with `cpuMillicores` and `memoryBytes` and leave `workers` unset: a 2 CPU actor gets 2 workers and a 4 CPU actor gets 4 (measured in the gVisor sandbox), up to 4. Set `maxWorkers` to raise that ceiling, or `workers` to force a number. Start with about 1 CPU and 1 GiB for each worker, and make the worker pool of Agent Substrate (`substrate.workers.cpu` and `memory`) about twice the size of the actor. The metrics carry the id of the worker, so the workers do not overwrite each other (see "Reporting a running command").
 
 ## Reporting a running command
 

@@ -308,7 +308,7 @@ is "agent.runDetails false leaves the run details setting out" "$?"
 ! grep -q 'OTEL__IS_ENABLED' <<<"$(agent_chart --show-only templates/actor.yaml)"
 is "metrics are off when no endpoint is set" "$?"
 out="$(agent_chart --set agent.metricsCollector.enabled=true --show-only templates/actor.yaml)"
-grep -q 'OTEL__OTLP_ENDPOINT: http://pr-agent-metrics.a.svc.cluster.local:4318' <<<"$out" && grep -q 'ate-secret://k8s.io/default/a/pr-agent-metrics/password' <<<"$out" && grep -q 'GUNICORN_WORKERS: "2"' <<<"$out"
+grep -q 'OTEL__OTLP_ENDPOINT: http://pr-agent-metrics.a.svc.cluster.local:4318' <<<"$out" && grep -q 'ate-secret://k8s.io/default/a/pr-agent-metrics/password' <<<"$out" && ! grep -q 'GUNICORN_WORKERS' <<<"$out"
 is "the metrics collector is the OTLP endpoint of the actor, with the generated token sent by the egress proxy" "$?" "$out"
 out="$(agent_chart --set agent.metricsCollector.enabled=true --show-only templates/actor.yaml)"
 grep -q 'OTEL_RESOURCE_ATTRIBUTES: ate.actor=a/pr-agent' <<<"$out" && grep -q 'pr_agent.commands_in_flight' <<<"$out" && grep -q 'keep_base_url=True' <<<"$out" && grep -q 'runpy.run_module("gunicorn"' <<<"$out"
@@ -381,9 +381,12 @@ is "with fallbackModels the actor fails over at once, and the timeout defaults t
 out="$(agent_chart --set 'agent.fallbackModels={ollama/small:8b}' --set agent.retrySameModelOnTimeout=true --set agent.modelRetries=3 --show-only templates/actor.yaml)"; plain="$(agent_chart --set agent.modelRetries=0 --show-only templates/actor.yaml)"
 grep -q 'CONFIG__RETRY_SAME_MODEL_ON_TIMEOUT: "true"' <<<"$out" && grep -q 'CONFIG__NUM_RETRIES: "3"' <<<"$out" && grep -q 'CONFIG__NUM_RETRIES: "0"' <<<"$plain"
 is "agent.retrySameModelOnTimeout and agent.modelRetries override the failover defaults" "$?"
-grep -q 'GUNICORN_WORKERS: "4"' <<<"$(agent_chart --set agent.workers=4 --show-only templates/actor.yaml)" && grep -q 'GUNICORN_WORKERS: "2"' <<<"$(agent_chart --show-only templates/actor.yaml)"
-is "agent.workers sets the worker processes, 2 by default, with or without metrics" "$?"
+grep -q 'GUNICORN_WORKERS: "4"' <<<"$(agent_chart --set agent.workers=4 --show-only templates/actor.yaml)" && ! grep -q 'GUNICORN_' <<<"$(agent_chart --show-only templates/actor.yaml)"
+is "agent.workers overrides the worker processes, and none is set by default so pr-agent counts them from the CPUs" "$?"
+grep -q 'GUNICORN_MAX_WORKERS: "8"' <<<"$(agent_chart --set agent.maxWorkers=8 --show-only templates/actor.yaml)"
+is "agent.maxWorkers sets the ceiling of the automatic worker count" "$?"
 agent_fails "zero workers fail" 'agent.workers must be' --set agent.workers=0
+agent_fails "a zero ceiling fails" 'agent.maxWorkers must be' --set agent.maxWorkers=0
 agent_fails "a model retry count above 10 fails" 'agent.modelRetries must be' --set agent.modelRetries=11
 agent_fails "a fallback model with another prefix fails" 'agent.fallbackModels must use the same prefix' --set 'agent.fallbackModels={openai/other}'
 agent_fails "a model timeout that is not a number fails" 'agent.modelTimeoutSeconds' --set agent.modelTimeoutSeconds=abc
