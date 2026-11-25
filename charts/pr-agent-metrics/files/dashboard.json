@@ -2,7 +2,8 @@
   "title": "Agent: __NAME__",
   "uid": "ai-agent-__NAME__",
   "tags": [
-    "ai-agent"
+    "ai-agent",
+    "pr-agent"
   ],
   "schemaVersion": 39,
   "version": 1,
@@ -35,8 +36,8 @@
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 5,
-        "w": 6,
+        "h": 4,
+        "w": 4,
         "x": 0,
         "y": 0
       },
@@ -110,16 +111,16 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Reviews started in the last 24 hours",
-      "description": "The number of reviews that pr-agent started in the last 24 hours. A review that failed is counted too.",
+      "title": "Reviews started",
+      "description": "Reviews that started in the time range at the top right of the dashboard. A command counts when it starts, so a review that failed counts too.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 6,
+        "h": 4,
+        "w": 4,
+        "x": 4,
         "y": 0
       },
       "fieldConfig": {
@@ -162,7 +163,129 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"}[24h])) or vector(0)"
+          "expr": "sum(increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"}[$__range])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "Commands failed",
+      "description": "The share of commands that ended with an error, out of all that ended, in the time range at the top right of the dashboard. A command that was skipped does not count. Green is below 5 percent, orange up to 20 percent, red above that.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "decimals": 1,
+          "noValue": "0%",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.05
+              },
+              {
+                "color": "red",
+                "value": 0.2
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(increase(pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"}[$__range])) / clamp_min(sum(increase(pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\"}[$__range])), 1)"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "Answered by a fallback model",
+      "description": "The share of commands that a fallback model answered because the main model failed or timed out, in the time range at the top right of the dashboard.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "decimals": 1,
+          "noValue": "0%",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"true\"}[$__range])) / clamp_min(sum(increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[$__range])), 1)"
         }
       ]
     },
@@ -170,15 +293,15 @@
       "id": 3,
       "type": "stat",
       "title": "Model calls per review",
-      "description": "How many times the agent asked the model for one review. A big review is cut into chunks, so the number is higher. A dash means no review yet.",
+      "description": "How many times the agent asked the model for one review. A big review is cut into chunks, so the number is higher. A dash means no review yet, in the time range at the top right of the dashboard.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 12,
+        "h": 4,
+        "w": 4,
+        "x": 16,
         "y": 0
       },
       "fieldConfig": {
@@ -221,23 +344,23 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(pr_agent_ai_calls_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"}[24h])) / (sum(increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"}[24h])) > 0)"
+          "expr": "sum(increase(pr_agent_ai_calls_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"}[$__range])) / (sum(increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"}[$__range])) > 0)"
         }
       ]
     },
     {
       "id": 4,
       "type": "stat",
-      "title": "Tokens used in the last 24 hours",
-      "description": "The size of the text sent to the model and back, input plus output, in the last 24 hours.",
+      "title": "Tokens used",
+      "description": "Tokens that the model read and wrote, in the time range at the top right of the dashboard.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 18,
+        "h": 4,
+        "w": 4,
+        "x": 20,
         "y": 0
       },
       "fieldConfig": {
@@ -280,9 +403,22 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(pr_agent_tokens_total{ate_actor=\"__ACTOR__\"}[24h])) or vector(0)"
+          "expr": "sum(increase(pr_agent_tokens_total{ate_actor=\"__ACTOR__\"}[$__range])) or vector(0)"
         }
       ]
+    },
+    {
+      "id": 14,
+      "type": "row",
+      "title": "Activity",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "panels": []
     },
     {
       "id": 5,
@@ -417,362 +553,17 @@
       "interval": "1m"
     },
     {
-      "id": 7,
-      "type": "stat",
-      "title": "Tokens read by the model",
-      "description": "The text that pr-agent sent to the model in the last 24 hours: the code and the instructions. It is far larger than what the model writes back, because a review reads a lot of code.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
+      "id": 15,
+      "type": "row",
+      "title": "Models and failures",
+      "collapsed": false,
       "gridPos": {
-        "h": 6,
-        "w": 12,
+        "h": 1,
+        "w": 24,
         "x": 0,
         "y": 13
       },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "noValue": "0",
-          "decimals": 1
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value",
-        "justifyMode": "center"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum(increase(pr_agent_tokens_total{ate_actor=\"__ACTOR__\",gen_ai_token_type=\"input\"}[24h])) or vector(0)"
-        }
-      ]
-    },
-    {
-      "id": 8,
-      "type": "stat",
-      "title": "Tokens written by the model",
-      "description": "The text that the model wrote back in the last 24 hours: the review, the description and the suggestions.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 12,
-        "y": 13
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "noValue": "0",
-          "decimals": 1
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value",
-        "justifyMode": "center"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum(increase(pr_agent_tokens_total{ate_actor=\"__ACTOR__\",gen_ai_token_type=\"output\"}[24h])) or vector(0)"
-        }
-      ]
-    },
-    {
-      "id": 9,
-      "type": "stat",
-      "title": "Commands that failed, last 24 hours",
-      "description": "The share of commands that ended with an error, out of all that ended. A command that was skipped does not count. Green is below 5 percent, orange up to 20 percent, red above that.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 0,
-        "y": 19
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1,
-          "decimals": 1,
-          "noValue": "0%",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 0.05
-              },
-              {
-                "color": "red",
-                "value": 0.2
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum(increase(pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"}[24h])) / clamp_min(sum(increase(pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\"}[24h])), 1)"
-        }
-      ]
-    },
-    {
-      "id": 10,
-      "type": "stat",
-      "title": "Answered by a fallback model, last 24 hours",
-      "description": "The share of commands that the main model did not answer, so a fallback model did. A high value means the main model fails or times out.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 6,
-        "y": 19
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1,
-          "decimals": 1,
-          "noValue": "0%",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum(increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"true\"}[24h])) / clamp_min(sum(increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[24h])), 1)"
-        }
-      ]
-    },
-    {
-      "id": 11,
-      "type": "table",
-      "title": "Models that answered, last 24 hours",
-      "description": "Each model that answered a command in the last 24 hours, and how many commands it answered. Role says whether it was the main model of the agent or a fallback model that took over because the main model failed or timed out.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 12,
-        "x": 12,
-        "y": 19
-      },
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "custom": {
-            "align": "auto"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Role"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "false": {
-                        "text": "Main model",
-                        "color": "green",
-                        "index": 0
-                      },
-                      "true": {
-                        "text": "Fallback model",
-                        "color": "orange",
-                        "index": 1
-                      }
-                    }
-                  }
-                ]
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "custom.width",
-                "value": 150
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Commands"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 110
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "sortBy": [
-          {
-            "displayName": "Commands",
-            "desc": true
-          }
-        ]
-      },
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "indexByName": {
-              "model": 0,
-              "fallback": 1,
-              "Value": 2
-            },
-            "renameByName": {
-              "model": "Model",
-              "fallback": "Role",
-              "Value": "Commands"
-            }
-          }
-        }
-      ],
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum by (model, fallback)(increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[24h])) > 0",
-          "format": "table",
-          "instant": true
-        }
-      ]
+      "panels": []
     },
     {
       "id": 12,
@@ -787,7 +578,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 24
+        "y": 14
       },
       "fieldConfig": {
         "defaults": {
@@ -891,7 +682,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 24
+        "y": 14
       },
       "fieldConfig": {
         "defaults": {
@@ -936,6 +727,266 @@
         }
       ],
       "interval": "1m"
+    },
+    {
+      "id": 16,
+      "type": "row",
+      "title": "Details",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "panels": []
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Models that answered",
+      "description": "Each model that answered a command in the time range at the top right of the dashboard, and how many commands it answered. Role says whether it was the main model of the agent or a fallback model that took over because the main model failed or timed out.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Role"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "false": {
+                        "text": "Main model",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "true": {
+                        "text": "Fallback model",
+                        "color": "orange",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Commands"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "Commands",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "model": 0,
+              "fallback": 1,
+              "Value": 2
+            },
+            "renameByName": {
+              "model": "Model",
+              "fallback": "Role",
+              "Value": "Commands"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (model, fallback)(increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[$__range])) > 0",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Tokens read by the model",
+      "description": "Tokens that the model read, in the time range at the top right of the dashboard. A review reads far more than it writes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 23
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "0",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(increase(pr_agent_tokens_total{ate_actor=\"__ACTOR__\",gen_ai_token_type=\"input\"}[$__range])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Tokens written by the model",
+      "description": "Tokens that the model wrote, in the time range at the top right of the dashboard.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 18,
+        "y": 23
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "0",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(increase(pr_agent_tokens_total{ate_actor=\"__ACTOR__\",gen_ai_token_type=\"output\"}[$__range])) or vector(0)"
+        }
+      ]
     }
-  ]
+  ],
+  "graphTooltip": 1,
+  "timezone": "browser",
+  "description": "How one pr-agent agent is used: reviews, failures, models and tokens. Every number follows the time range at the top right.",
+  "timepicker": {
+    "refresh_intervals": [
+      "1m",
+      "5m",
+      "15m",
+      "1h"
+    ]
+  }
 }
