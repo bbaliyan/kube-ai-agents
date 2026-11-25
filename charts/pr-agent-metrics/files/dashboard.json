@@ -569,7 +569,7 @@
       "id": 12,
       "type": "state-timeline",
       "title": "Model that answered over time",
-      "description": "One row for each model. A coloured stretch means that the model answered commands in that time. A fallback model has its own row, in orange, named with (fallback). When you change the model of the agent, the old row stops and the new row starts.",
+      "description": "One row for each model. A coloured stretch means that the model answered commands in that time. A fallback model has its own row, in orange, named with (fallback). When you change the model of the agent, the old row stops and the new row starts. The row of a model is empty where it answered nothing.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -654,17 +654,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (model)(((increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"false\"}[$__interval]) + (min_over_time(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"false\"}[$__interval]) unless pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"false\"} offset $__interval)) or increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"false\"}[$__interval]))) > 0",
-          "legendFormat": "{{model}}"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum by (model)(((increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"true\"}[$__interval]) + (min_over_time(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"true\"}[$__interval]) unless pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"true\"} offset $__interval)) or increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"true\"}[$__interval]))) > 0",
-          "legendFormat": "{{model}} (fallback)"
+          "expr": "label_replace(label_replace(sum by (model, fallback)(((increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[$__interval]) + (min_over_time(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[$__interval]) unless pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} offset $__interval)) or increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[$__interval]))), \"role\", \" (fallback)\", \"fallback\", \"true\"), \"role\", \"\", \"fallback\", \"false\") or (label_replace(vector(0), \"model\", \"No command answered yet\", \"\", \"\") unless sum(last_over_time(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[$__range])))",
+          "legendFormat": "{{model}}{{role}}"
         }
       ],
       "interval": "1m"
