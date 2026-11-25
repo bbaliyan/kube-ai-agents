@@ -77,7 +77,7 @@ Each pr-agent worker process has its own meter, so the actor patch gives each wo
 
 ## Dashboard
 
-Each agent can bring a simple Grafana dashboard, `Agent: <name>`. It shows four numbers and three charts:
+Each agent can bring a simple Grafana dashboard, `Agent: <name>`. It shows numbers, charts and a table:
 
 - Working right now? shows Busy or Idle.
 - Reviews started in the last 24 hours.
@@ -86,6 +86,12 @@ Each agent can bring a simple Grafana dashboard, `Agent: <name>`. It shows four 
 - Work started: reviews, descriptions and improvement suggestions that started, in bars (pr-agent counts a command when it starts). A bar covers the slice of time that ends at its right edge, on the same time scale as the busy time beside it.
 - Busy time: when the agent runs a command.
 - Tokens read by the model, and tokens written by the model, in the last 24 hours. Two plain numbers: a review reads far more than it writes.
+- Commands that failed, in the last 24 hours, as a share of the commands that ended. A command that pr-agent skipped does not count.
+- Answered by a fallback model, in the last 24 hours, as a share of all commands. A high value means the main model fails or times out.
+- A table of the models that answered in the last 24 hours, and a chart of the model that answered over time. When you change the model, the old name stops and the new name starts. A fallback model shows as `(fallback)`.
+- Commands that ended, by outcome: ok and failed.
+
+The model and the outcome come from the actor patch (see "Reporting a running command"). pr-agent keeps both in its run details and does not report them as metrics. The patch adds the counters `pr_agent_commands_finished_total` (label `outcome`) and `pr_agent_commands_by_model_total` (labels `model` and `fallback`).
 
 To turn it on, set `agent.dashboard.enabled: true`. It needs `agent.metricsCollector.enabled: true`. The chart `pr-agent-metrics` makes a ConfigMap with the label `grafana_dashboard: "1"`, and the Grafana sidecar loads it.
 

@@ -342,11 +342,11 @@ import json, sys, yaml
 cm = yaml.safe_load(sys.stdin)
 d = json.loads(cm["data"]["ai-agent-reviewer.json"])
 assert cm["metadata"]["labels"]["grafana_dashboard"] == "1"
-assert d["uid"] == "ai-agent-reviewer" and d["title"] == "Agent: reviewer" and len(d["panels"]) == 8
+assert d["uid"] == "ai-agent-reviewer" and d["title"] == "Agent: reviewer" and len(d["panels"]) == 13
 exprs = [t["expr"] for p in d["panels"] for t in p["targets"]]
 assert all("ate_actor=\"ate/rev\"" in e for e in exprs), exprs
 '
-is "the dashboard ConfigMap holds JSON with the uid, the title, 8 panels and the actor in every query" "$?"
+is "the dashboard ConfigMap holds JSON with the uid, the title, 13 panels and the actor in every query" "$?"
 ! grep -q 'PR_REVIEWER__ENABLE_LARGE_PR_CHUNKING' <<<"$(agent_chart --set agent.largeReviews=false --show-only templates/actor.yaml)" && grep -q 'PR_REVIEWER__MAX_NUMBER_OF_CALLS: "5"' <<<"$(agent_chart --set agent.maxReviewCalls=5 --show-only templates/actor.yaml)"
 is "agent.largeReviews and agent.maxReviewCalls set the chunking" "$?"
 grep -q 'CONFIG__AI_TIMEOUT: "300"' <<<"$(agent_chart --set agent.modelTimeoutSeconds=300 --show-only templates/actor.yaml)"
