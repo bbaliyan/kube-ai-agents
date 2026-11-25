@@ -679,8 +679,8 @@
     {
       "id": 13,
       "type": "timeseries",
-      "title": "Failed commands over time",
-      "description": "Commands that failed, in bars. A failed command had an error that pr-agent caught, or returned no result. An empty chart means no failures. A bar covers the time slice that ends at its right edge.",
+      "title": "Failed commands over time, by command",
+      "description": "Commands that failed, in bars, one colour for each command (review, describe, improve and so on). A failed command had an error that pr-agent caught, or returned no result. An empty chart means no failures. A bar covers the time slice that ends at its right edge.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -705,18 +705,23 @@
             "spanNulls": false,
             "barAlignment": -1,
             "axisSoftMax": 3,
-            "axisSoftMin": 0
+            "axisSoftMin": 0,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
           },
           "color": {
-            "mode": "fixed",
-            "fixedColor": "red"
+            "mode": "palette-classic"
           }
         },
         "overrides": []
       },
       "options": {
         "legend": {
-          "showLegend": false
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
         },
         "tooltip": {
           "mode": "single",
@@ -730,8 +735,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum((((pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} - pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} offset $__interval) >= 0) or (pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} unless pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} offset $__interval) or (pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} < pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} offset $__interval))) or vector(0)",
-          "legendFormat": "Failed"
+          "expr": "sum by (pr_agent_command)((((pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} - pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} offset $__interval) >= 0) or (pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} unless pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} offset $__interval) or (pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} < pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} offset $__interval)))",
+          "legendFormat": "{{pr_agent_command}}"
         }
       ],
       "interval": "1m"

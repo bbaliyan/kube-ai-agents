@@ -1,6 +1,6 @@
 # Runs inside the actor, in the master process of gunicorn, before gunicorn starts (see the command in
 # templates/_helpers.tpl). It reports each running pr-agent command as the gauge pr_agent.commands_in_flight, and
-# each command that ends as the counters pr_agent.commands_finished (outcome ok or failed) and
+# each command that ends as the counters pr_agent.commands_finished (outcome ok or failed, and the command) and
 # pr_agent.commands_by_model (the model that answered, and whether it was a fallback).
 #
 # Upstream gap: pr-agent has counters for commands, tokens and model calls, but no gauge for commands that
@@ -10,6 +10,8 @@
 #
 # The wrapper is on handle_request, which also runs the final flush of the telemetry. It adds 1, flushes at
 # once, runs the command, then subtracts 1 and flushes again. It never raises into the request path.
+# Each worker gets its own service.instance.id, from a hook after the fork, so that the workers do not overwrite each other's
+# series: the master forks the workers, and the meter of a worker is made later, inside it, from OTEL_RESOURCE_ATTRIBUTES.
 # The master forks the worker, and a thread that the master starts does not survive the fork. So the
 # instrument is made on the first call, inside the worker, and never at import time.
 import asyncio
@@ -29,8 +31,7 @@ def _install_in_flight_gauge():
 
     instruments = None
 
-    async def record(delta, outcome=None, model=None, fallback=False):
-        """Add delta to the gauge, count the outcome and the model, and push. Return True if the gauge changed."""
+    async def record(delta, outcome=None, model=None, fallback=False, command="unknown"):
         nonlocal instruments
         changed = False
         try:
@@ -38,21 +39,21 @@ def _install_in_flight_gauge():
                 meter = get_meter()
                 instruments = (
                     meter.create_up_down_counter(
-                        "pr_agent.commands_in_flight", unit="{command}", description="PR-Agent commands that run now"
+                        "pr_agent.commands_in_flight", unit="{command}", description="Commands that run now"
                     ),
                     meter.create_counter(
-                        "pr_agent.commands_finished", unit="{command}", description="PR-Agent commands that ended, by outcome"
+                        "pr_agent.commands_finished", unit="{command}", description="Commands that ended"
                     ),
                     meter.create_counter(
                         "pr_agent.commands_by_model", unit="{command}",
-                        description="PR-Agent commands, by the model that answered",
+                        description="Commands by model",
                     ),
                 )
             gauge, finished, by_model = instruments
             gauge.add(delta)
             changed = True
             if outcome:
-                finished.add(1, {"outcome": outcome})
+                finished.add(1, {"outcome": outcome, "pr_agent.command": command})
             if model:
                 by_model.add(1, {"model": model, "fallback": "true" if fallback else "false"})
             await asyncio.to_thread(flush_telemetry)
@@ -65,7 +66,12 @@ def _install_in_flight_gauge():
     @functools.wraps(original)
     async def handle_request(self, *args, **kwargs):
         counted = await record(1)
-        outcome, model, fallback = "failed", None, False
+        outcome, model, fallback, command = "failed", None, False, "unknown"
+        try:
+            request = args[1] if len(args) > 1 else kwargs.get("request")
+            command = (request.split(None, 1)[0] if isinstance(request, str) else request[0]).lstrip("/").lower()
+        except Exception:
+            pass
         try:
             result = await original(self, *args, **kwargs)
             if result is RequestOutcome.SKIPPED:
@@ -78,17 +84,12 @@ def _install_in_flight_gauge():
             return result
         finally:
             if counted:
-                await record(-1, outcome, model, fallback)
+                await record(-1, outcome, model, fallback, command)
 
     PRAgent.handle_request = handle_request
 
 
 def _name_each_worker():
-    """Give each gunicorn worker its own service.instance.id, so the workers do not overwrite each other's series.
-
-    The master forks the workers, and the meter of a worker is made later, inside it, from OTEL_RESOURCE_ATTRIBUTES.
-    A hook that runs in each child, right after the fork, adds the id of the process there.
-    """
     if os.environ.get("OTEL__IS_ENABLED", "").lower() != "true":
         return
 

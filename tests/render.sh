@@ -361,6 +361,7 @@ assert all("offset $__interval" in e for e in exprs if "$__interval" in e and "p
 timeline = [x for x in d["panels"] if x["id"] == 12][0]
 assert any(o["matcher"]["options"] == "No command answered yet" and o["properties"][0]["id"] == "custom.hideFrom" and o["properties"][0]["value"]["viz"] for o in timeline["fieldConfig"]["overrides"]), "the placeholder row of the timeline must be hidden from the chart"
 assert "No command answered yet" in timeline["targets"][0]["expr"], "the timeline needs the placeholder so that it never has an empty result"
+assert any("sum by (pr_agent_command)" in t["expr"] and "outcome=\"failed\"" in t["expr"] for x in d["panels"] if x["id"] == 13 for t in x["targets"]), "the failures chart must split by command"
 assert d["time"]["from"] == "now-24h" and "ai-agent" in d["tags"] and d["graphTooltip"] == 1
 assert all("ate_actor=\"ate/rev\"" in e for e in exprs), exprs
 '
