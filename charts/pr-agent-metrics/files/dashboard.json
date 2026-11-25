@@ -110,8 +110,8 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Reviews in the last 24 hours",
-      "description": "How many merge request reviews the agent did in the last 24 hours.",
+      "title": "Reviews started in the last 24 hours",
+      "description": "The number of reviews that pr-agent started in the last 24 hours. A review that failed is counted too.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -287,8 +287,8 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Work done",
-      "description": "Reviews, descriptions and improvement suggestions that finished. Each bar covers the time slice that ends at its right edge, so it lines up with the busy time beside it. Zoom out and the bars get wider.",
+      "title": "Work started",
+      "description": "Reviews, descriptions and improvement suggestions that started. A bar covers the time slice that ends at its right edge, so it lines up with the busy time beside it. A command counts when it starts, so a long review shows at its start and the busy time shows how long it ran. Zoom out and the bars get wider.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"

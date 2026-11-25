@@ -67,10 +67,10 @@ The collector chart `pr-agent-metrics` copies only `ate.actor` to a label and de
 Each agent can bring a simple Grafana dashboard, `Agent: <name>`. It shows four numbers and three charts:
 
 - Working right now? shows Busy or Idle.
-- Reviews in the last 24 hours.
+- Reviews started in the last 24 hours.
 - Model calls per review. A review that is cut into chunks shows a higher number.
 - Tokens used in the last 24 hours.
-- Work done: reviews, descriptions and improvement suggestions that finished, in bars. A bar covers the slice of time that ends at its right edge, on the same time scale as the busy time beside it.
+- Work started: reviews, descriptions and improvement suggestions that started, in bars (pr-agent counts a command when it starts). A bar covers the slice of time that ends at its right edge, on the same time scale as the busy time beside it.
 - Busy time: when the agent runs a command.
 - Tokens read by the model, and tokens written by the model, in the last 24 hours. Two plain numbers: a review reads far more than it writes.
 
