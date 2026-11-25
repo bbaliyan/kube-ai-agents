@@ -101,10 +101,15 @@
 {{- $timeout := int $p.modelTimeoutSeconds -}}
 {{- if lt $timeout 1 }}{{ fail "agent.modelTimeoutSeconds must be a whole number of seconds, at least 1" }}{{ end -}}
 {{- $_ := set $env "CONFIG__AI_TIMEOUT" ($timeout | toString) -}}
-{{- /* Each gunicorn worker is one process with one event loop. The metrics carry the id of the worker (actor_patch.py), so the workers do not overwrite each other. */ -}}
-{{- $workers := int $p.workers -}}
-{{- if lt $workers 1 }}{{ fail "agent.workers must be a whole number, at least 1" }}{{ end -}}
-{{- $_ := set $env "GUNICORN_WORKERS" ($workers | toString) -}}
+{{- /* Each gunicorn worker is one process with one event loop. Unset, pr-agent counts them from the CPUs of the actor. The metrics carry the id of the worker (actor_patch.py), so the workers do not overwrite each other. */ -}}
+{{- if not (kindIs "invalid" $p.workers) }}
+{{- if lt (int $p.workers) 1 }}{{ fail "agent.workers must be a whole number, at least 1, or unset" }}{{ end -}}
+{{- $_ := set $env "GUNICORN_WORKERS" (int $p.workers | toString) -}}
+{{- end -}}
+{{- if not (kindIs "invalid" $p.maxWorkers) }}
+{{- if lt (int $p.maxWorkers) 1 }}{{ fail "agent.maxWorkers must be a whole number, at least 1, or unset" }}{{ end -}}
+{{- $_ := set $env "GUNICORN_MAX_WORKERS" (int $p.maxWorkers | toString) -}}
+{{- end -}}
 {{- /* With a fallback, do not replay a call on the model that just failed: move on at once. */ -}}
 {{- $retryOnTimeout := $p.retrySameModelOnTimeout -}}
 {{- $modelRetries := $p.modelRetries -}}
