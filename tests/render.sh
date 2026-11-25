@@ -356,6 +356,8 @@ assert d["uid"] == "ai-agent-reviewer" and d["title"] == "Agent: reviewer" and l
 exprs = [t["expr"] for p in d["panels"] for t in p.get("targets", [])]
 assert not any("[24h]" in e for e in exprs), "a panel has a fixed 24 hour window, and must follow the time range"
 assert all(e.count("increase(") == 2 * e.count("min_over_time(") for e in exprs), "a panel counts with a bare increase(), which loses the first value of a new series"
+assert all("increase(" not in e for e in exprs if "$__interval" in e), "a chart counts a bucket with increase(), which loses a jump between two buckets"
+assert all("offset $__interval" in e for e in exprs if "$__interval" in e and "pr_agent_" in e), "a bucket count must compare the counter with the counter one bucket ago"
 assert d["time"]["from"] == "now-24h" and "ai-agent" in d["tags"] and d["graphTooltip"] == 1
 assert all("ate_actor=\"ate/rev\"" in e for e in exprs), exprs
 '
