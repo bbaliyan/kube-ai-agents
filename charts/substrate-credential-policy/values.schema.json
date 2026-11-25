@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "controlPlaneNamespace": {
+      "type": "string"
+    },
+    "podMonitoringCrdStub": {
+      "type": "boolean"
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "atespace": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "atespace",
+          "namespace"
+        ]
+      }
+    }
+  }
+}

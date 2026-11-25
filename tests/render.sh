@@ -127,8 +127,15 @@ out="$(helm template stack "$repo/charts/substrate-stack" -f "$work/incluster/st
 grep -q 'storage: 20Gi' <<<"$out"
 is "a consumer value overrides an install default" "$?"
 out="$(helm template stack "$repo/charts/substrate-stack")"
-[ "$(install_value <(printf '%s\n' "$out") config.ateapi.authz.bootstrapOwners)" = 'system:serviceaccount:ate-system:ate-client' ] && grep -q 'enabled":false' <<<"$out" && [ -z "$(install_value <(printf '%s\n' "$out") config.ingressAllowedSPIFFEIDs)" ]
+[ "$(install_value <(printf '%s\n' "$out") config.ateapi.authz.bootstrapOwners)" = 'system:serviceaccount:ate-system:ate-client' ] && [ "$(install_value <(printf '%s\n' "$out") config.atenet.egress.credentialProvider)" = '{"enabled":false}' ] && [ -z "$(install_value <(printf '%s\n' "$out") config.ingressAllowedSPIFFEIDs)" ]
 is "with no agent the install has no agent owner, no credential provider and no allow-list" "$?"
+
+helm template stack "$repo/charts/substrate-stack" -f "$work/incluster/stack-values.yaml" --set substrate.workers.replcas=2 >/dev/null 2>&1
+is "a misspelled key of the stack fails the schema" "$((1 - $?))"
+helm template metrics "$repo/charts/pr-agent-metrics" --set serviceMonitor.sampelLimit=5 >/dev/null 2>&1
+is "a misspelled key of the metrics chart fails the schema" "$((1 - $?))"
+helm template policy "$repo/charts/substrate-credential-policy" --set 'agents[0].atespace=a' >/dev/null 2>&1
+is "an agent entry without a namespace fails the policy schema" "$((1 - $?))"
 
 agent="$work/incluster/pr-agent.yaml"
 for suffix in actor registration idle-suspend webhook metrics; do

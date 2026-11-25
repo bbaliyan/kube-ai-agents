@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "self": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repoURL": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      }
+    },
+    "substrate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repoURL": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "installImageDigest": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "bucket": {
+          "type": "string"
+        },
+        "s3Endpoint": {
+          "type": "string"
+        },
+        "selinuxLevel": {
+          "type": "string"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "podMonitoringCrdStub": {
+          "type": "boolean"
+        },
+        "podMonitorLabels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "install": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "helmValues": {
+              "type": "object"
+            }
+          }
+        },
+        "workers": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "replicas": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "cpu": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "memory": {
+              "type": "string"
+            },
+            "helmValues": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "atespace": {
+            "type": "string"
+          },
+          "webhook": {
+            "type": "boolean"
+          },
+          "idleSuspend": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}
