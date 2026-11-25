@@ -53,6 +53,14 @@ The metrics collector uses fixed resource names in its namespace, so each agent 
 
 Remove its entry from `agents`. Argo CD prunes the Applications of the agent (wave 1) before its project (wave -1), so the finalizers and the unregister hook still find the namespace permitted. Each Application of the agent has the resources finalizer, so Argo CD deletes the Applications and what they made. It does not delete the namespace of the agent (the consumer owns it). By default it does not unregister the actor, its templates or the atespace in Agent Substrate: they are rows in the control plane database, which a finalizer cannot reach. Set `agent.registration.unregister: true` to unregister them. The registration chart then runs an Argo CD PreDelete hook Job when its Application is deleted. The hook deletes the actor, its templates and the atespace if no other agent uses it. It needs a revision of `substrate.revision` that has `unregister.enabled`. If the hook fails or hangs, the sync of the parent waits for the Application to go, so the whole stack waits too. Delete the hook Job, or remove the finalizer of the Application, to go on. If you skip the finalizer, or leave the value off, delete them by hand with `kubectl ate delete actor`, `actor-template` and `atespace`.
 
+## Reporting a running command
+
+pr-agent has counters for commands, tokens and model calls, but no gauge for the commands that run now. With metrics on, the actor reports one: the gauge `pr_agent_commands_in_flight` (OpenTelemetry name `pr_agent.commands_in_flight`, unit `{command}`). It is 1 while a command runs, and 0 when it ends. It has the label `ate_actor`, in the form `<atespace>/<actor name>`, from the resource attribute `OTEL_RESOURCE_ATTRIBUTES`. The chart does not use the template name, because that name is a hash of the template, and the env is part of the template.
+
+The code is an inline patch, `charts/agent/files/actor_patch.py`. The chart puts it in the command of the actor, next to the patch that turns on `keep_base_url`, and not in a derived image. A derived image is one more image to build, sign and pin. The patch wraps `PRAgent.handle_request`, adds 1 and pushes the metrics at once, runs the command, and subtracts 1 and pushes again. If the meter or the push fails, it logs a warning and runs the command. It does nothing when `OTEL__IS_ENABLED` is not `true`. The upstream gap is issue 5125 in The-PR-Agent/pr-agent (an in-flight gauge). Delete the patch when it ships.
+
+The collector chart `pr-agent-metrics` copies only `ate.actor` to a label and deletes `service.instance.id`, so a restart overwrites an old value and does not leave a second series. A suspend in the middle of a command can leave a stale 1. The idle suspend chart of kube-agent-substrate reads the gauge as the signal `busy`, and it stops reading a value as busy after a cap, so `metricExpiration` stays at its default.
+
 ## PodMonitors
 
 When an agent turns on idle suspend, the `substrate-stack` chart makes one Application, `substrate-monitors`. It renders the PodMonitors of the control plane, so no agent owns them. Set the label that Prometheus selects them by in `substrate.podMonitorLabels`.
@@ -67,7 +75,7 @@ make test-commit
 
 - `make charts` lints each chart and validates what it renders.
 - `make test-charts` runs the helm-unittest tests.
-- `make test-scripts` runs `tests/render.sh`. It renders the parent, the stack and each agent for both examples, and it checks the failures.
+- `make test-scripts` runs the unit tests of the patch (`tests/test_actor_patch.py`) and `tests/render.sh`. It renders the parent, the stack and each agent for both examples, and it checks the failures.
 
 The charts are not applied to a cluster by these checks.
 
