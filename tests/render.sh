@@ -340,7 +340,7 @@ helm template reviewer-metrics "$repo/charts/pr-agent-metrics" --set dashboard.e
   | python3 -c '
 import json, sys, yaml
 cm = yaml.safe_load(sys.stdin)
-d = json.loads(cm["data"]["dashboard.json"])
+d = json.loads(cm["data"]["ai-agent-reviewer.json"])
 assert cm["metadata"]["labels"]["grafana_dashboard"] == "1"
 assert d["uid"] == "ai-agent-reviewer" and d["title"] == "Agent: reviewer" and len(d["panels"]) == 7
 exprs = [t["expr"] for p in d["panels"] for t in p["targets"]]
