@@ -99,15 +99,12 @@
 {{- end -}}
 {{- if $p.runDetails }}{{ $_ := set $env "CONFIG__OUTPUT_RUN_DETAILS" "true" }}{{ end -}}
 {{- $timeout := int $p.modelTimeoutSeconds -}}
-{{- if lt $timeout 1 }}{{ fail "agent.modelTimeoutSeconds must be a whole number of seconds, at least 1" }}{{ end -}}
 {{- $_ := set $env "CONFIG__AI_TIMEOUT" ($timeout | toString) -}}
 {{- /* Each gunicorn worker is one process with one event loop. Unset, pr-agent counts them from the CPUs of the actor. The metrics carry the id of the worker (actor_patch.py), so the workers do not overwrite each other. */ -}}
 {{- if not (kindIs "invalid" $p.workers) }}
-{{- if lt (int $p.workers) 1 }}{{ fail "agent.workers must be a whole number, at least 1, or unset" }}{{ end -}}
 {{- $_ := set $env "GUNICORN_WORKERS" (int $p.workers | toString) -}}
 {{- end -}}
 {{- if not (kindIs "invalid" $p.maxWorkers) }}
-{{- if lt (int $p.maxWorkers) 1 }}{{ fail "agent.maxWorkers must be a whole number, at least 1, or unset" }}{{ end -}}
 {{- $_ := set $env "GUNICORN_MAX_WORKERS" (int $p.maxWorkers | toString) -}}
 {{- end -}}
 {{- /* With a fallback, do not replay a call on the model that just failed: move on at once. */ -}}
@@ -119,12 +116,10 @@
 {{- end -}}
 {{- if not (kindIs "invalid" $retryOnTimeout) }}{{ $_ := set $env "CONFIG__RETRY_SAME_MODEL_ON_TIMEOUT" (toString $retryOnTimeout) }}{{ end -}}
 {{- if not (kindIs "invalid" $modelRetries) }}
-{{- if or (lt (int $modelRetries) 0) (gt (int $modelRetries) 10) }}{{ fail "agent.modelRetries must be a whole number from 0 to 10" }}{{ end -}}
 {{- $_ := set $env "CONFIG__NUM_RETRIES" (int $modelRetries | toString) -}}
 {{- end -}}
 {{- if $p.largeReviews }}
 {{- $calls := int $p.maxReviewCalls -}}
-{{- if lt $calls 1 }}{{ fail "agent.maxReviewCalls must be a whole number, at least 1" }}{{ end -}}
 {{- $_ := set $env "PR_REVIEWER__ENABLE_LARGE_PR_CHUNKING" "true" -}}
 {{- $_ := set $env "PR_REVIEWER__MAX_NUMBER_OF_CALLS" ($calls | toString) -}}
 {{- end -}}
@@ -179,3 +174,21 @@ its contents, which include this env.
 {{- if $https }}{{ $_ := set $actor "egressTrustBundle" true }}{{ end -}}
 {{- toJson (list $actor) -}}
 {{- end -}}
+
+{{/* The metadata and the project that every Application of an agent has. Deleting the Application deletes what it made. Without the finalizer, removing an agent leaves its children behind. */}}
+{{- define "agent.application" -}}
+metadata:
+  name: {{ .root.Values.agent.name }}-{{ .suffix }}
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ .wave | quote }}
+spec:
+  project: {{ required "project is required: the parent chart passes the project of the agent" .root.Values.project }}
+{{- end }}
+
+{{- define "agent.destination" -}}
+server: https://kubernetes.default.svc
+namespace: {{ .namespace }}
+{{- end }}
