@@ -1,10 +1,19 @@
 # Two agents. GitLab and the model server use https, so the egress gateway CA must be trusted.
 # The model server needs a key, which the egress proxy sends from a Secret. Every host name is an example.
+# GitLab has a certificate from a private CA. The egress proxy must trust that CA to inspect the calls of the actor,
+# so the CA goes to the install as egress.trustedCaPem. Put your own PEM there.
 substrate:
   s3Endpoint: https://s3.example.test
   bucket: agent-snapshots
   nodeSelector:
     example.test/node-group: agents
+  install:
+    helmValues:
+      egress:
+        trustedCaPem: |
+          -----BEGIN CERTIFICATE-----
+          EXAMPLE-ONLY-REPLACE-WITH-THE-PEM-OF-YOUR-PRIVATE-CA
+          -----END CERTIFICATE-----
 
 agents:
   - name: reviewer

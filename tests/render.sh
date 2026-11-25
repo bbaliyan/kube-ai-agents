@@ -245,6 +245,13 @@ for fixture in incluster external two; do
   is "what each agent of the $fixture fixture makes fits its project" "$?" "$out"
 done
 
+[ -n "$(install_value "$work/external/stack.yaml" config.egress.trustedCaPem)" ] || [ -n "$(install_value "$work/external/stack.yaml" egress.trustedCaPem)" ]
+is "the external-gitlab example passes a private CA to the install as the trusted CA of the egress proxy" "$?" "$(install_value "$work/external/stack.yaml" egress.trustedCaPem)"
+# Every host in a public example is a reserved example name, a cluster-internal name or a public code host.
+hosts="$(grep -ohE '(https?)://[A-Za-z0-9.-]+' "$external" | sed 's|^[a-z]*://||' | sort -u)"
+[ -n "$hosts" ] && ! grep -vE '(^|\.)(example\.test|github\.com)$|\.svc(\.cluster\.local)?$' <<<"$hosts" | grep -q .
+is "the external-gitlab example names only example hosts" "$?" "$hosts"
+
 # ---- what the parent refuses ----------------------------------------------------------
 refuse() { # name, expected error text, the agents block
   local file="$work/refuse.yaml" out
