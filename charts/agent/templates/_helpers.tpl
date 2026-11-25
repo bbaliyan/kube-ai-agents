@@ -103,6 +103,11 @@
 {{- $timeout := int $p.modelTimeoutSeconds -}}
 {{- if lt $timeout 1 }}{{ fail "agent.modelTimeoutSeconds must be a whole number of seconds, at least 1" }}{{ end -}}
 {{- $_ := set $env "CONFIG__AI_TIMEOUT" ($timeout | toString) -}}
+{{- /* With a fallback, do not replay a call on the model that just failed: move on at once. */ -}}
+{{- if $p.fallbackModels }}
+{{- $_ := set $env "CONFIG__RETRY_SAME_MODEL_ON_TIMEOUT" "false" -}}
+{{- $_ := set $env "CONFIG__NUM_RETRIES" "1" -}}
+{{- end -}}
 {{- if $p.largeReviews }}
 {{- $calls := int $p.maxReviewCalls -}}
 {{- if lt $calls 1 }}{{ fail "agent.maxReviewCalls must be a whole number, at least 1" }}{{ end -}}

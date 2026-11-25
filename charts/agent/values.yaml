@@ -70,8 +70,10 @@ agent:
   # must stay under the request rate of the model server. Set largeReviews to false to review only what fits in one call.
   largeReviews: true
   maxReviewCalls: 20
-  # The seconds that pr-agent waits for one model call before it retries.
-  modelTimeoutSeconds: 600
+  # The seconds that pr-agent waits for one model call. With fallbackModels set, a timed-out call goes to the next
+  # model at once and a failed connection is retried once, so a dead main model costs about this long. Without
+  # fallbackModels, pr-agent retries the same model, so a hung call costs twice this long.
+  modelTimeoutSeconds: 300
   # The GitLab address that the actor uses. The egress policy allows its host and sets the token there.
   gitlabUrl: ""
   # More GitLab addresses that the actor may call, with the same token. An https address needs egressTrustBundle.
