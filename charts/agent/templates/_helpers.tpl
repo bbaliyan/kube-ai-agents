@@ -103,6 +103,11 @@
 {{- $timeout := int $p.modelTimeoutSeconds -}}
 {{- if lt $timeout 1 }}{{ fail "agent.modelTimeoutSeconds must be a whole number of seconds, at least 1" }}{{ end -}}
 {{- $_ := set $env "CONFIG__AI_TIMEOUT" ($timeout | toString) -}}
+{{- if $p.ignoreUserIds }}
+{{- $ids := list -}}
+{{- range $p.ignoreUserIds }}{{ $ids = append $ids (toString .) }}{{ end -}}
+{{- $_ := set $env "GITLAB__IGNORE_USER_IDS" (join "," $ids) -}}
+{{- end -}}
 {{- /* With a fallback, do not replay a call on the model that just failed: move on at once. */ -}}
 {{- $retryOnTimeout := $p.retrySameModelOnTimeout -}}
 {{- $modelRetries := $p.modelRetries -}}
