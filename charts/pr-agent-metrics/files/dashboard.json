@@ -418,50 +418,51 @@
     },
     {
       "id": 7,
-      "type": "timeseries",
-      "title": "Tokens per hour",
-      "description": "Text sent to the model (input) and received from it (output), in each hour.",
+      "type": "stat",
+      "title": "Tokens read by the model",
+      "description": "The text that pr-agent sent to the model in the last 24 hours: the code and the instructions. It is far larger than what the model writes back, because a review reads a lot of code.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 8,
-        "w": 24,
+        "h": 6,
+        "w": 12,
         "x": 0,
         "y": 13
       },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "min": 0,
-          "decimals": 0,
-          "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 70,
-            "lineWidth": 1,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "mode": "normal",
-              "group": "A"
-            }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
           },
           "color": {
-            "mode": "palette-classic"
-          }
+            "mode": "thresholds"
+          },
+          "noValue": "0",
+          "decimals": 1
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
       },
       "targets": [
         {
@@ -470,19 +471,66 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(pr_agent_tokens_total{ate_actor=\"__ACTOR__\",gen_ai_token_type=\"input\"}[1h]))",
-          "legendFormat": "Input",
-          "interval": "1h"
+          "expr": "sum(increase(pr_agent_tokens_total{ate_actor=\"__ACTOR__\",gen_ai_token_type=\"input\"}[24h])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Tokens written by the model",
+      "description": "The text that the model wrote back in the last 24 hours: the review, the description and the suggestions.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "0",
+          "decimals": 1
         },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
         {
-          "refId": "B",
+          "refId": "A",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(pr_agent_tokens_total{ate_actor=\"__ACTOR__\",gen_ai_token_type=\"output\"}[1h]))",
-          "legendFormat": "Output",
-          "interval": "1h"
+          "expr": "sum(increase(pr_agent_tokens_total{ate_actor=\"__ACTOR__\",gen_ai_token_type=\"output\"}[24h])) or vector(0)"
         }
       ]
     }

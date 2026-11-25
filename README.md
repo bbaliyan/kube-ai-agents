@@ -72,7 +72,7 @@ Each agent can bring a simple Grafana dashboard, `Agent: <name>`. It shows four 
 - Tokens used in the last 24 hours.
 - Work done per hour: reviews, descriptions and improvement suggestions.
 - Busy time: when the agent runs a command.
-- Tokens per hour: input and output.
+- Tokens read by the model, and tokens written by the model, in the last 24 hours. Two plain numbers: a review reads far more than it writes.
 
 To turn it on, set `agent.dashboard.enabled: true`. It needs `agent.metricsCollector.enabled: true`. The chart `pr-agent-metrics` makes a ConfigMap with the label `grafana_dashboard: "1"`, and the Grafana sidecar loads it.
 
