@@ -38,6 +38,9 @@ agent:
   model: ollama/qwen3-coder:30b
   # The base URL of the model server. Use a DNS name, not an IP address. Empty fails the render.
   modelEndpoint: ""
+  # Optional. Models that pr-agent tries, in order, when a call to `model` fails or times out. They run on the same
+  # server as `model`, so each must start with the same prefix. Example: [ollama/qwen3:8b].
+  fallbackModels: []
   # Optional. A Secret in `namespace` that holds the key of the model server: {name: ..., key: ...}. The egress
   # proxy sends it as a bearer token, so the actor never holds it. Leave it empty for a server with no login.
   modelApiKeySecret: {}

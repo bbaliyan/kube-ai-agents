@@ -32,6 +32,9 @@
 {{- if not $p.modelEndpoint }}{{ fail "agent.enabled needs agent.modelEndpoint, the base URL of the model server, for example http://model.example.test:11434" }}{{ end -}}
 {{- $model := include "agent.checkedAddress" (dict "address" $p.modelEndpoint "name" "agent.modelEndpoint") | fromJson -}}
 {{- $provider := include "agent.providerSettings" $p.model | fromJson -}}
+{{- range $p.fallbackModels | default list }}
+{{- if ne (index (splitList "/" .) 0) (index (splitList "/" $p.model) 0) }}{{ fail (printf "agent.fallbackModels must use the same prefix as agent.model, because they share one model server. Got %q" .) }}{{ end }}
+{{- end -}}
 {{- $gitlabRules := list -}}
 {{- $gitlabHttps := false -}}
 {{- $gitlabHosts := list -}}
@@ -60,7 +63,7 @@
   "PORT" "80"
   "CONFIG__GIT_PROVIDER" "gitlab"
   "CONFIG__MODEL" $p.model
-  "CONFIG__FALLBACK_MODELS" "[]"
+  "CONFIG__FALLBACK_MODELS" ($p.fallbackModels | default list | toJson)
   "CONFIG__CUSTOM_MODEL_MAX_TOKENS" ($p.contextLength | toString)
   "CONFIG__MAX_MODEL_TOKENS" ($p.contextLength | toString)
   "CONFIG__DUPLICATE_PROMPT_EXAMPLES" "true"
