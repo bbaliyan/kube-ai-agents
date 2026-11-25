@@ -1,5 +1,5 @@
 apiVersion: v2
 name: substrate-credential-policy
-description: The namespace policy of the credential provider of Agent Substrate, built from the list of agents, and a stub of the PodMonitoring CRD
+description: The namespace policy of the credential provider of Agent Substrate, built from the list of agents
 type: application
 version: 0.1.0

@@ -36,6 +36,7 @@ spec:
             "preview" "PerTemplateSnapshotLocation"
             "ateapi" (dict "authz" (dict "bootstrapOwners" (join "," $owners)))
             "atenet" (dict "egress" (dict "credentialProvider" (ternary "{\"name\":\"k8s.io\"}" "{\"enabled\":false}" (gt (len .Values.agents) 0)))))
+          "podMonitoringCrdStub" .Values.substrate.podMonitoringCrdStub
           "postgres" (dict
             "resources" (dict "requests" (dict "cpu" "250m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "2Gi"))
             "storage" "10Gi") -}}
