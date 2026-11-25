@@ -1,16 +1,7 @@
 {{- $a := .Values.agent }}
 apiVersion: argoproj.io/v1alpha1
 kind: Application
-metadata:
-  name: {{ $a.name }}-actor
-  namespace: argocd
-  finalizers:
-    # Deleting the Application deletes what it made. Without it, removing an agent leaves its children behind.
-    - resources-finalizer.argocd.argoproj.io
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-spec:
-  project: {{ required "project is required: the parent chart passes the project of the agent" $.Values.project }}
+{{- include "agent.application" (dict "suffix" "actor" "wave" 0 "root" $) | nindent 0 }}
   source:
     repoURL: {{ .Values.substrate.repoURL | quote }}
     targetRevision: {{ .Values.substrate.revision | quote }}
@@ -23,8 +14,7 @@ spec:
           "actors" (include "agent.actors" . | fromJsonArray) -}}
         {{- mergeOverwrite $actors $a.actorHelmValues | toYaml | nindent 8 }}
   destination:
-    server: https://kubernetes.default.svc
-    namespace: {{ $a.namespace }}
+    {{- include "agent.destination" $a | nindent 4 }}
   syncPolicy:
     automated:
       prune: true

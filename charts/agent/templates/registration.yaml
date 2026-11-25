@@ -3,17 +3,8 @@
 # The service account name below gives the Job that identity.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
-metadata:
-  name: {{ $a.name }}-registration
-  namespace: argocd
-  finalizers:
-    # Deleting the Application deletes what it made. Without it, removing an agent leaves its children behind.
-    - resources-finalizer.argocd.argoproj.io
-  annotations:
-    # After the actor. The registration Job reads the ConfigMaps that the actor chart renders.
-    argocd.argoproj.io/sync-wave: "1"
-spec:
-  project: {{ required "project is required: the parent chart passes the project of the agent" $.Values.project }}
+# After the actor. The registration Job reads the ConfigMaps that the actor chart renders.
+{{- include "agent.application" (dict "suffix" "registration" "wave" 1 "root" $) | nindent 0 }}
   source:
     repoURL: {{ .Values.substrate.repoURL | quote }}
     targetRevision: {{ .Values.substrate.revision | quote }}
@@ -38,8 +29,7 @@ spec:
         {{- end }}
         {{- mergeOverwrite $registration $a.registration.helmValues | toYaml | nindent 8 }}
   destination:
-    server: https://kubernetes.default.svc
-    namespace: {{ $a.namespace }}
+    {{- include "agent.destination" $a | nindent 4 }}
   syncPolicy:
     automated:
       prune: true

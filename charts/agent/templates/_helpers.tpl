@@ -179,3 +179,21 @@ its contents, which include this env.
 {{- if $https }}{{ $_ := set $actor "egressTrustBundle" true }}{{ end -}}
 {{- toJson (list $actor) -}}
 {{- end -}}
+
+{{/* The metadata and the project that every Application of an agent has. Deleting the Application deletes what it made. Without the finalizer, removing an agent leaves its children behind. */}}
+{{- define "agent.application" -}}
+metadata:
+  name: {{ .root.Values.agent.name }}-{{ .suffix }}
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ .wave | quote }}
+spec:
+  project: {{ required "project is required: the parent chart passes the project of the agent" .root.Values.project }}
+{{- end }}
+
+{{- define "agent.destination" -}}
+server: https://kubernetes.default.svc
+namespace: {{ .namespace }}
+{{- end }}
