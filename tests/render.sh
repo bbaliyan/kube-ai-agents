@@ -93,18 +93,19 @@ is "no Application of the chain uses the default project" "$?"
 python3 - "$parent" <<'PY'
 import sys, yaml
 p = {d["metadata"]["name"]: d["spec"] for d in yaml.safe_load_all(open(sys.argv[1])) if d and d["kind"] == "AppProject"}
-assert sorted(p) == ["ai-agent", "pr-agent"], sorted(p)
+assert sorted(p) == ["ai-agent", "ai-agent-pr-agent"], sorted(p)
 assert [x["namespace"] for x in p["ai-agent"]["destinations"]] == ["argocd", "ate-system"], p["ai-agent"]["destinations"]
-assert [x["namespace"] for x in p["pr-agent"]["destinations"]] == ["pr-agent", "ate-system"], p["pr-agent"]["destinations"]
-for k in ("sourceRepos", "clusterResourceWhitelist", "namespaceResourceWhitelist"):
-    assert p["pr-agent"][k] == p["ai-agent"][k], k
+assert [x["namespace"] for x in p["ai-agent-pr-agent"]["destinations"]] == ["pr-agent", "ate-system"], p["ai-agent-pr-agent"]["destinations"]
+for k in ("sourceRepos", "namespaceResourceWhitelist"):
+    assert p["ai-agent-pr-agent"][k] == p["ai-agent"][k], k
+assert p["ai-agent-pr-agent"]["clusterResourceWhitelist"] == [], "an agent project allows no cluster-scoped kind"
 PY
-is "the shared project has no agent namespace, and each agent has its own project with its namespace and the control plane namespace, and the same rules" "$?"
+is "the shared project has no agent namespace, and each agent has its own project with its namespace and the control plane namespace, the same repositories and no cluster-scoped kind" "$?"
 grep -A12 '^  clusterResourceWhitelist:' "$parent" | grep -q 'kind: CustomResourceDefinition' && grep -A12 '^  clusterResourceWhitelist:' "$parent" | grep -q 'kind: Namespace'
 is "the project allows the cluster-scoped kinds that the children make" "$?"
 [ "$(wave_of "$parent" Application substrate)" = 0 ] && [ "$(wave_of "$parent" Application pr-agent)" = 1 ] && [ "$(wave_of "$parent" AppProject ai-agent)" = -1 ]
 is "the project syncs first, then the control plane, then the agents" "$?"
-[ "$(wave_of "$parent" AppProject pr-agent)" -lt "$(wave_of "$parent" Application pr-agent)" ]
+[ "$(wave_of "$parent" AppProject ai-agent-pr-agent)" -lt "$(wave_of "$parent" Application pr-agent)" ]
 is "the project of an agent has a lower wave than its Application, so removal prunes the Application first" "$?"
 
 stack="$work/incluster/stack.yaml"
@@ -136,7 +137,7 @@ for suffix in actor registration idle-suspend webhook metrics; do
 done
 [ "$(app_names "$agent" | wc -l)" -eq 5 ] && [ "$(app_names "$agent" | sort -u | wc -l)" -eq 5 ]
 is "the agent chart renders five Applications with unique names" "$?"
-[ "$(grep -c '^  project: pr-agent$' "$agent")" -eq 5 ]
+[ "$(grep -c '^  project: ai-agent-pr-agent$' "$agent")" -eq 5 ]
 is "every child Application uses the project of the agent" "$?"
 [ "$(grep -c 'resources-finalizer.argocd.argoproj.io' "$agent")" -eq 5 ] && application "$parent" pr-agent | grep -q 'resources-finalizer.argocd.argoproj.io'
 is "every agent Application deletes what it made when it is removed" "$?"
@@ -192,6 +193,58 @@ is "the stack makes one monitors Application for any number of agents with idle 
 ! app_names "$work/external/stack.yaml" | grep -qx 'substrate-monitors'
 is "the stack makes no monitors Application when no agent has idle suspend" "$?"
 
+# What each agent deploys must fit its project: every object in a permitted namespace, and no cluster-scoped kind.
+# The Applications of the agent chart are rendered, then each source chart is rendered with the values that the Application gives.
+fits_project() { # chain directory
+  python3 - "$1" "$repo" <<'PY'
+import sys, os, subprocess, yaml
+d, repo = sys.argv[1:3]
+parent = [x for x in yaml.safe_load_all(open(d + "/parent.yaml")) if x]
+projects = {x["metadata"]["name"]: x["spec"] for x in parent if x["kind"] == "AppProject"}
+cluster_kinds = {"Namespace", "CustomResourceDefinition", "ClusterRole", "ClusterRoleBinding", "MutatingAdmissionPolicy", "MutatingAdmissionPolicyBinding", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding", "Bundle", "ClusterIssuer", "PriorityClass", "StorageClass", "RuntimeClass", "APIService", "ValidatingWebhookConfiguration", "MutatingWebhookConfiguration"}
+problems = []
+for app in parent:
+    if app["kind"] != "Application" or app["metadata"]["name"] == "substrate":
+        continue
+    agent = app["metadata"]["name"]
+    project = projects["ai-agent-" + agent]
+    allowed = {x["namespace"] for x in project["destinations"]}
+    for child in yaml.safe_load_all(open("%s/%s.yaml" % (d, agent))):
+        if not child or child["kind"] != "Application":
+            continue
+        name, spec = child["metadata"]["name"], child["spec"]
+        if spec["project"] != "ai-agent-" + agent:
+            problems.append("%s uses project %s" % (name, spec["project"]))
+        if spec["destination"]["namespace"] not in allowed:
+            problems.append("%s deploys to %s" % (name, spec["destination"]["namespace"]))
+        chart = spec["source"]["path"].split("/")[-1]
+        local = repo + "/charts/" + chart
+        if not os.path.isdir(local):
+            continue  # a chart of kube-agent-substrate: not in this repository
+        values = d + "/child-" + name + ".yaml"
+        yaml.safe_dump(spec["source"]["helm"].get("valuesObject", {}), open(values, "w"))
+        out = subprocess.run(["helm", "template", spec["source"]["helm"].get("releaseName", name), local, "-f", values, "--namespace", spec["destination"]["namespace"]], capture_output=True, text=True)
+        if out.returncode:
+            problems.append("%s does not render: %s" % (name, out.stderr[:200]))
+            continue
+        for obj in yaml.safe_load_all(out.stdout):
+            if not obj:
+                continue
+            if obj["kind"] in cluster_kinds:
+                problems.append("%s makes the cluster-scoped %s %s" % (name, obj["kind"], obj["metadata"]["name"]))
+            else:
+                ns = obj["metadata"].get("namespace") or spec["destination"]["namespace"]
+                if ns not in allowed:
+                    problems.append("%s makes %s %s in %s" % (name, obj["kind"], obj["metadata"]["name"], ns))
+if problems:
+    sys.exit(chr(10).join(problems))
+PY
+}
+for fixture in incluster external two; do
+  out="$(fits_project "$work/$fixture" 2>&1)"
+  is "what each agent of the $fixture fixture makes fits its project" "$?" "$out"
+done
+
 # ---- what the parent refuses ----------------------------------------------------------
 refuse() { # name, expected error text, the agents block
   local file="$work/refuse.yaml" out
@@ -208,8 +261,6 @@ refuse "an unknown agent type fails" 'type' "agents:
   - {name: odd, type: other-agent, $addresses}"
 refuse "an agent with no type fails" 'type' "agents:
   - {name: odd, $addresses}"
-refuse "an agent named ai-agent fails" 'cannot be named ai-agent' "agents:
-  - {name: ai-agent, type: pr-agent, $addresses}"
 refuse "two agents in one namespace fail" 'two agents use the namespace' "agents:
   - {name: one, type: pr-agent, namespace: shared, $addresses}
   - {name: two, type: pr-agent, namespace: shared, $addresses}"

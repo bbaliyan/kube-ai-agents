@@ -24,7 +24,7 @@ spec:
           {{- toYaml $.Values.self | nindent 10 }}
         substrate:
           {{- toYaml (pick $.Values.substrate "repoURL" "revision" "namespace" "bucket" "nodeSelector") | nindent 10 }}
-        project: {{ .name }}
+        project: ai-agent-{{ .name }}
         agent:
           {{- toYaml . | nindent 10 }}
   destination:
