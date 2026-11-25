@@ -20,16 +20,16 @@ tests:
           path: metadata.labels.grafana_dashboard
           value: "1"
       - matchRegex:
-          path: data["dashboard.json"]
+          path: data["ai-agent-reviewer.json"]
           pattern: '"uid": "ai-agent-reviewer"'
       - matchRegex:
-          path: data["dashboard.json"]
+          path: data["ai-agent-reviewer.json"]
           pattern: '"title": "Agent: reviewer"'
       - matchRegex:
-          path: data["dashboard.json"]
+          path: data["ai-agent-reviewer.json"]
           pattern: 'ate_actor=\\"reviews/pr-agent\\"'
       - notMatchRegex:
-          path: data["dashboard.json"]
+          path: data["ai-agent-reviewer.json"]
           pattern: '__NAME__|__ACTOR__'
 
   - it: fails without a name when it is on

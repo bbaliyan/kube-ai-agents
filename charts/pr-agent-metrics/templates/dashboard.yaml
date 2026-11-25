@@ -7,7 +7,9 @@ metadata:
     # The Grafana sidecar loads every ConfigMap with this label.
     grafana_dashboard: "1"
 data:
-  dashboard.json: |
+  # The file name carries the name of the agent. The Grafana sidecar writes every key as a file, so two agents with
+  # the same key would overwrite each other.
+  ai-agent-{{ required "dashboard.name is required when the dashboard is on" .Values.dashboard.name }}.json: |
     {{- .Files.Get "files/dashboard.json"
       | replace "__NAME__" (required "dashboard.name is required when the dashboard is on" .Values.dashboard.name)
       | replace "__ACTOR__" (required "dashboard.actor is required when the dashboard is on, in the form <atespace>/<actor name>" .Values.dashboard.actor)
