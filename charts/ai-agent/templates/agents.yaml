@@ -12,7 +12,7 @@ metadata:
     # After the control plane.
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  project: ai-agent
+  project: ai-agents-stack
   source:
     repoURL: {{ $.Values.self.repoURL | quote }}
     targetRevision: {{ $.Values.self.revision | quote }}

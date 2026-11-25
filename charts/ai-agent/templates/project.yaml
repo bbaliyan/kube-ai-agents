@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
-  name: ai-agent
+  name: ai-agents-stack
   namespace: argocd
   annotations:
     # Before every Application that uses it.

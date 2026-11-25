@@ -8,18 +8,18 @@ You point one Argo CD Application at the chart `ai-agent` and list your agents i
 
 | Chart | What it makes |
 |---|---|
-| `charts/ai-agent` | The parent. An Argo CD project `ai-agent`, one project for each agent, one Application `substrate` and one Application for each agent. |
+| `charts/ai-agent` | The parent. An Argo CD project `ai-agents-stack`, one project for each agent, one Application `substrate` and one Application for each agent. |
 | `charts/substrate-stack` | The shared control plane: the credential policy, the install and the workers. |
 | `charts/substrate-credential-policy` | The namespace policy of the credential provider, built from the list of agents. It also makes a stub of the PodMonitoring CRD. |
 | `charts/agent` | One agent: the actor, its registration, idle suspend, the webhook shim and the metrics collector. |
 | `charts/pr-agent-webhook` | The GitLab webhook shim, an Envoy proxy. |
 | `charts/pr-agent-metrics` | An OpenTelemetry collector for the metrics of pr-agent. |
 
-The Applications `substrate` and one for each agent use the shared project `ai-agent`. It allows this repository, the Agent Substrate repository, and the namespaces `argocd` and of the control plane. Each agent also has its own project, named `ai-agent-<name>`. The project allows the same repositories, the namespace of the agent and of the control plane, and no cluster-scoped kind. Every child Application of the agent uses that project. The parent passes its name to the `agent` chart in the value `project`.
+The Applications `substrate` and one for each agent use the shared project `ai-agents-stack`. It allows this repository, the Agent Substrate repository, and the namespaces `argocd` and of the control plane. Each agent also has its own project, named `ai-agent-<name>`. The project allows the same repositories, the namespace of the agent and of the control plane, and no cluster-scoped kind. Every child Application of the agent uses that project. The parent passes its name to the `agent` chart in the value `project`.
 
 ## How it fits together
 
-1. The project `ai-agent` and the project of each agent sync first (wave -1).
+1. The project `ai-agents-stack` and the project of each agent sync first (wave -1).
 2. The Application `substrate` syncs next (wave 0). Inside it, the credential policy comes first, then the install, then the workers.
 3. One Application for each agent syncs last (wave 1). Inside it, the actor, the shim and the collector come first, then the registration, then idle suspend.
 
@@ -73,5 +73,5 @@ The charts are not applied to a cluster by these checks.
 
 ## Limits
 
-- The project `ai-agent` allows a ClusterRoleBinding, because the install binds a cluster role. Any source that the project allows can therefore escalate. Allow only repositories that you trust.
+- The project `ai-agents-stack` allows a ClusterRoleBinding, because the install binds a cluster role. Any source that the project allows can therefore escalate. Allow only repositories that you trust.
 - The credential policy is read once, when the credential provider starts. If you add an agent after the first install, restart the credential provider so that it reads the new entry.
