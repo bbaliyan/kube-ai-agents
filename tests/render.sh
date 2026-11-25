@@ -373,6 +373,9 @@ agent_fails "a metrics endpoint on the model host fails" 'agent.metricsEndpoint 
 agent_fails "a model key Secret with no key fails" 'agent.modelApiKeySecret needs a key' --set agent.modelApiKeySecret.name=model-key
 agent_fails "a model key Secret with no name fails" 'agent.modelApiKeySecret needs a name' --set agent.modelApiKeySecret.key=api-key
 agent_fails "a review call cap that is not a number fails" 'agent.maxReviewCalls' --set agent.maxReviewCalls=abc
+grep -q 'CONFIG__FALLBACK_MODELS: .\["ollama/small:8b","ollama/tiny:3b"\]' <<<"$(agent_chart --set 'agent.fallbackModels={ollama/small:8b,ollama/tiny:3b}' --show-only templates/actor.yaml)" && grep -q 'CONFIG__FALLBACK_MODELS: .\[\]' <<<"$(agent_chart --show-only templates/actor.yaml)"
+is "agent.fallbackModels sets the fallback list, empty by default" "$?"
+agent_fails "a fallback model with another prefix fails" 'agent.fallbackModels must use the same prefix' --set 'agent.fallbackModels={openai/other}'
 agent_fails "a model timeout that is not a number fails" 'agent.modelTimeoutSeconds' --set agent.modelTimeoutSeconds=abc
 agent_fails "idle suspend with no Prometheus address fails" 'agent.idleSuspend.prometheusUrl is required' --set agent.idleSuspend.enabled=true
 
