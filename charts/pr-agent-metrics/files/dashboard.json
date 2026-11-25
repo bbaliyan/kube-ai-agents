@@ -716,9 +716,9 @@
     },
     {
       "id": 12,
-      "type": "timeseries",
+      "type": "state-timeline",
       "title": "Model that answered over time",
-      "description": "Commands by the model that answered. A fallback model shows as its name with (fallback). When you change the model of the agent, the old name stops and the new one starts. A bar covers the time slice that ends at its right edge.",
+      "description": "One row for each model. A coloured stretch means that the model answered commands in that time. A fallback model has its own row, in orange, named with (fallback). When you change the model of the agent, the old row stops and the new row starts.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -731,34 +731,68 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "none",
-          "min": 0,
-          "decimals": 0,
           "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 70,
-            "lineWidth": 1,
-            "showPoints": "never",
-            "spanNulls": false,
-            "barAlignment": -1,
-            "stacking": {
-              "mode": "normal",
-              "group": "A"
-            }
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "mergeValues": true,
+            "spanNulls": false
           },
           "color": {
-            "mode": "palette-classic"
-          }
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0.01
+              }
+            ]
+          },
+          "mappings": [],
+          "noValue": ""
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*\\(fallback\\)"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.01
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
+        "showValue": "never",
+        "rowHeight": 0.85,
+        "alignValue": "center",
+        "mergeValues": true,
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+          "showLegend": false
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -769,7 +803,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (model)(increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"false\"}[$__interval]))",
+          "expr": "sum by (model)(increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"false\"}[$__interval])) > 0",
           "legendFormat": "{{model}}"
         },
         {
@@ -778,7 +812,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (model)(increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"true\"}[$__interval]))",
+          "expr": "sum by (model)(increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\",fallback=\"true\"}[$__interval])) > 0",
           "legendFormat": "{{model}} (fallback)"
         }
       ],
@@ -787,8 +821,8 @@
     {
       "id": 13,
       "type": "timeseries",
-      "title": "Commands that ended, by outcome",
-      "description": "Commands that ended well and commands that failed. A failed command had an error that pr-agent caught, or returned no result. A bar covers the time slice that ends at its right edge.",
+      "title": "Failed commands over time",
+      "description": "Commands that failed, in bars. A failed command had an error that pr-agent caught, or returned no result. An empty chart means no failures. A bar covers the time slice that ends at its right edge.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -803,63 +837,30 @@
         "defaults": {
           "unit": "none",
           "min": 0,
+          "softMax": 3,
           "decimals": 0,
+          "noValue": "0",
           "custom": {
             "drawStyle": "bars",
-            "fillOpacity": 70,
+            "fillOpacity": 85,
             "lineWidth": 1,
             "showPoints": "never",
             "spanNulls": false,
-            "barAlignment": -1,
-            "stacking": {
-              "mode": "normal",
-              "group": "A"
-            }
+            "barAlignment": -1
           },
           "color": {
-            "mode": "palette-classic"
+            "mode": "fixed",
+            "fixedColor": "red"
           }
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "ok"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "failed"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+          "showLegend": false
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -870,8 +871,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (outcome)(increase(pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\"}[$__interval]))",
-          "legendFormat": "{{outcome}}"
+          "expr": "sum(increase(pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"}[$__interval])) or vector(0)",
+          "legendFormat": "Failed"
         }
       ],
       "interval": "1m"
