@@ -26,7 +26,8 @@ def install_stubs(test, original, gauge_error=None, flush_error=None):
     """Put stub pr_agent modules in sys.modules. Return the gauge and the event log."""
     log = []
     gauge = Gauge(log)
-    names = ["pr_agent", "pr_agent.agent", "pr_agent.agent.pr_agent", "pr_agent.log",
+    names = ["pr_agent", "pr_agent.agent", "pr_agent.agent.pr_agent", "pr_agent.agent.request_policy", "pr_agent.algo",
+             "pr_agent.algo.run_details", "pr_agent.log",
              "pr_agent.telemetry", "pr_agent.telemetry.meter", "pr_agent.telemetry.shutdown"]
     saved = {name: sys.modules.get(name) for name in names}
     test.addCleanup(lambda: [sys.modules.pop(n, None) if v is None else sys.modules.__setitem__(n, v) for n, v in saved.items()])
@@ -38,12 +39,32 @@ def install_stubs(test, original, gauge_error=None, flush_error=None):
     PRAgent.handle_request = original
     modules["pr_agent.agent.pr_agent"].PRAgent = PRAgent
 
+    class Counter:
+        def __init__(self, name):
+            self.name = name
+
+        def add(self, amount, attributes=None):
+            log.append(("count", self.name, amount, attributes))
+
     class Meter:
         def create_up_down_counter(self, name, unit, description):
             log.append(("create", name, unit))
             if gauge_error:
                 raise gauge_error
             return gauge
+
+        def create_counter(self, name, unit, description):
+            log.append(("create", name, unit))
+            return Counter(name)
+
+    class RequestOutcome:
+        SKIPPED = object()
+
+    modules["pr_agent.agent.request_policy"].RequestOutcome = RequestOutcome
+    details = types.SimpleNamespace(model_used=None, fallback_used=False, command_failed=False)
+    modules["pr_agent.algo.run_details"].get_run_details = lambda: details
+    modules["pr_agent.algo.run_details"].command_failed = lambda: details.command_failed
+    test.details, test.RequestOutcome = details, RequestOutcome
 
     modules["pr_agent.telemetry.meter"].get_meter = lambda: Meter()
 
@@ -132,7 +153,68 @@ class ActorPatchTest(unittest.TestCase):
         self.assertEqual(log, [])
         asyncio.run(PRAgent().handle_request())
         asyncio.run(PRAgent().handle_request())
-        self.assertEqual([entry for entry in log if entry[0] == "create"], [("create", "pr_agent.commands_in_flight", "{command}")])
+        self.assertEqual([entry[1] for entry in log if entry[0] == "create"],
+                         ["pr_agent.commands_in_flight", "pr_agent.commands_finished", "pr_agent.commands_by_model"])
+        self.assertEqual(len([entry for entry in log if entry[0] == "create"]), 3)
+
+    def counts(self, log):
+        return [(entry[1], entry[3]) for entry in log if entry[0] == "count"]
+
+    def test_a_command_that_returns_true_counts_as_ok_with_its_model(self):
+        async def original(self):
+            return True
+
+        PRAgent, gauge, log = install_stubs(self, original)
+        self.details.model_used, self.details.fallback_used = "ollama/m1", False
+        run_patch()
+        asyncio.run(PRAgent().handle_request())
+        self.assertEqual(self.counts(log), [("pr_agent.commands_finished", {"outcome": "ok"}),
+                                            ("pr_agent.commands_by_model", {"model": "ollama/m1", "fallback": "false"})])
+
+    def test_a_fallback_model_is_marked(self):
+        async def original(self):
+            return True
+
+        PRAgent, gauge, log = install_stubs(self, original)
+        self.details.model_used, self.details.fallback_used = "ollama/m2", True
+        run_patch()
+        asyncio.run(PRAgent().handle_request())
+        self.assertIn(("pr_agent.commands_by_model", {"model": "ollama/m2", "fallback": "true"}), self.counts(log))
+
+    def test_a_command_that_returns_false_or_swallowed_an_error_counts_as_failed(self):
+        results = [False, True]
+
+        async def original(self):
+            return results.pop(0)
+
+        PRAgent, gauge, log = install_stubs(self, original)
+        run_patch()
+        asyncio.run(PRAgent().handle_request())
+        self.details.command_failed = True
+        asyncio.run(PRAgent().handle_request())
+        self.assertEqual([c for c in self.counts(log) if c[0] == "pr_agent.commands_finished"],
+                         [("pr_agent.commands_finished", {"outcome": "failed"})] * 2)
+
+    def test_a_command_that_raises_counts_as_failed_and_the_error_goes_on(self):
+        async def original(self):
+            raise RuntimeError("boom")
+
+        PRAgent, gauge, log = install_stubs(self, original)
+        run_patch()
+        with self.assertRaises(RuntimeError):
+            asyncio.run(PRAgent().handle_request())
+        self.assertIn(("pr_agent.commands_finished", {"outcome": "failed"}), self.counts(log))
+        self.assertEqual(gauge.value, 0)
+
+    def test_a_skipped_command_is_not_counted_as_an_outcome(self):
+        async def original(self):
+            return self.skipped
+
+        PRAgent, gauge, log = install_stubs(self, original)
+        PRAgent.skipped = self.RequestOutcome.SKIPPED
+        run_patch()
+        asyncio.run(PRAgent().handle_request())
+        self.assertEqual(self.counts(log), [])
 
     @unittest.skipUnless(hasattr(os, "fork"), "needs fork")
     def test_each_forked_worker_gets_its_own_instance_id_and_the_master_does_not(self):
