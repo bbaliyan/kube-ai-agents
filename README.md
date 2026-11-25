@@ -63,14 +63,6 @@ model: ollama/qwen3-coder:30b
 fallbackModels: [ollama/qwen3:8b]
 ```
 
-## Many reviews at once
-
-Each comment of the review bot sends a webhook call to the actor too. A review writes several comments, so a burst of reviews makes about three webhook calls for each request. GitLab gives up on a call after 10 seconds. Set `ignoreUserIds` on the agent to the GitLab user id of the review bot, so pr-agent drops its own events at once.
-
-```yaml
-ignoreUserIds: [123]
-```
-
 ## Reporting a running command
 
 pr-agent has counters for commands, tokens and model calls, but no gauge for the commands that run now. With metrics on, the actor reports one: the gauge `pr_agent_commands_in_flight` (OpenTelemetry name `pr_agent.commands_in_flight`, unit `{command}`). It is 1 while a command runs, and 0 when it ends. It has the label `ate_actor`, in the form `<atespace>/<actor name>`, from the resource attribute `OTEL_RESOURCE_ATTRIBUTES`. The chart does not use the template name, because that name is a hash of the template, and the env is part of the template.
