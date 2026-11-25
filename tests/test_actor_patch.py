@@ -168,8 +168,19 @@ class ActorPatchTest(unittest.TestCase):
         self.details.model_used, self.details.fallback_used = "ollama/m1", False
         run_patch()
         asyncio.run(PRAgent().handle_request())
-        self.assertEqual(self.counts(log), [("pr_agent.commands_finished", {"outcome": "ok"}),
+        self.assertEqual(self.counts(log), [("pr_agent.commands_finished", {"outcome": "ok", "pr_agent.command": "unknown"}),
                                             ("pr_agent.commands_by_model", {"model": "ollama/m1", "fallback": "false"})])
+
+    def test_the_command_is_the_first_word_of_the_request_like_in_pr_agent(self):
+        async def original(self, url, request):
+            return False
+
+        PRAgent, gauge, log = install_stubs(self, original)
+        run_patch()
+        asyncio.run(PRAgent().handle_request("https://example.test/mr/1", '/Review --pr_reviewer.x="a b"'))
+        asyncio.run(PRAgent().handle_request("https://example.test/mr/1", ["describe", "--y"]))
+        commands = [c[1]["pr_agent.command"] for c in self.counts(log) if c[0] == "pr_agent.commands_finished"]
+        self.assertEqual(commands, ["review", "describe"])
 
     def test_a_fallback_model_is_marked(self):
         async def original(self):
@@ -193,7 +204,7 @@ class ActorPatchTest(unittest.TestCase):
         self.details.command_failed = True
         asyncio.run(PRAgent().handle_request())
         self.assertEqual([c for c in self.counts(log) if c[0] == "pr_agent.commands_finished"],
-                         [("pr_agent.commands_finished", {"outcome": "failed"})] * 2)
+                         [("pr_agent.commands_finished", {"outcome": "failed", "pr_agent.command": "unknown"})] * 2)
 
     def test_a_command_that_raises_counts_as_failed_and_the_error_goes_on(self):
         async def original(self):
@@ -203,7 +214,7 @@ class ActorPatchTest(unittest.TestCase):
         run_patch()
         with self.assertRaises(RuntimeError):
             asyncio.run(PRAgent().handle_request())
-        self.assertIn(("pr_agent.commands_finished", {"outcome": "failed"}), self.counts(log))
+        self.assertIn(("pr_agent.commands_finished", {"outcome": "failed", "pr_agent.command": "unknown"}), self.counts(log))
         self.assertEqual(gauge.value, 0)
 
     def test_a_skipped_command_is_not_counted_as_an_outcome(self):
