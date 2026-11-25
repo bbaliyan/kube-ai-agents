@@ -404,10 +404,12 @@ grep -q 'GUNICORN_WORKERS: "4"' <<<"$(agent_chart --set agent.workers=4 --show-o
 is "agent.workers overrides the worker processes, and none is set by default so pr-agent counts them from the CPUs" "$?"
 grep -q 'GUNICORN_MAX_WORKERS: "8"' <<<"$(agent_chart --set agent.maxWorkers=8 --show-only templates/actor.yaml)"
 is "agent.maxWorkers sets the ceiling of the automatic worker count" "$?"
-agent_fails "zero workers fail" 'agent.workers must be' --set agent.workers=0
-agent_fails "a zero ceiling fails" 'agent.maxWorkers must be' --set agent.maxWorkers=0
-agent_fails "a model retry count above 10 fails" 'agent.modelRetries must be' --set agent.modelRetries=11
+agent_fails "zero workers fail" 'agent.workers' --set agent.workers=0
+agent_fails "a zero ceiling fails" 'agent.maxWorkers' --set agent.maxWorkers=0
+agent_fails "a model retry count above 10 fails" 'agent.modelRetries' --set agent.modelRetries=11
 agent_fails "a fallback model with another prefix fails" 'agent.fallbackModels must use the same prefix' --set 'agent.fallbackModels={openai/other}'
+agent_fails "a value that the schema does not know fails, so a typo does not pass silently" 'idleSuspnd' --set agent.idleSuspnd.enabled=true
+agent_fails "a nested value that the schema does not know fails" 'enable' --set agent.idleSuspend.enable=true
 agent_fails "a model timeout that is not a number fails" 'agent.modelTimeoutSeconds' --set agent.modelTimeoutSeconds=abc
 agent_fails "idle suspend with no Prometheus address fails" 'agent.idleSuspend.prometheusUrl is required' --set agent.idleSuspend.enabled=true
 
@@ -435,5 +437,14 @@ grep -q 'kind: ServiceAccount' <<<"$out" && grep -q '^  name: a-webhook$' <<<"$o
 is "the shim chart names its service account from the name value, not from the actor" "$?" "$out"
 
 echo
+python3 - "$repo" <<'PY'
+import json, sys
+root = sys.argv[1]
+chart = json.load(open(f"{root}/charts/agent/values.schema.json"))["properties"]["agent"]
+parent = json.load(open(f"{root}/charts/ai-agent/values.schema.json"))["definitions"]["agent"]
+sys.exit(0 if chart == parent else 1)
+PY
+is "the agent schema of the parent chart is the same as the schema of the agent chart" "$?"
+
 if [ "$failures" -gt 0 ]; then echo "$failures failed"; exit 1; fi
 echo "all passed"
