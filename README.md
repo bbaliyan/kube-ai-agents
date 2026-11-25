@@ -10,7 +10,7 @@ You point one Argo CD Application at the chart `ai-agent` and list your agents i
 |---|---|
 | `charts/ai-agent` | The parent. An Argo CD project `ai-agents-stack`, one project for each agent, one Application `substrate` and one Application for each agent. |
 | `charts/substrate-stack` | The shared control plane: the credential policy, the install and the workers. |
-| `charts/substrate-credential-policy` | The namespace policy of the credential provider, built from the list of agents. It also makes a stub of the PodMonitoring CRD. |
+| `charts/substrate-credential-policy` | The namespace policy of the credential provider, built from the list of agents. |
 | `charts/agent` | One agent: the actor, its registration, idle suspend, the webhook shim and the metrics collector. |
 | `charts/substrate-idle-suspend` | A CronJob that suspends idle actors from Prometheus metrics, and the PodMonitors of the control plane. The `agent` chart deploys it for each agent, and `substrate-stack` deploys it once for the PodMonitors. |
 | `charts/pr-agent-webhook` | The GitLab webhook shim, an Envoy proxy. |

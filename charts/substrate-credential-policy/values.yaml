@@ -7,7 +7,3 @@ controlPlaneNamespace: ate-system
 agents: []
 #  - atespace: reviews
 #    namespace: pr-agent
-
-# A stub of the GKE PodMonitoring CRD. The base manifests of Substrate hold a PodMonitoring object, and ate-setup
-# refuses to apply them without the CRD. A cluster without the GKE operator needs the stub (upstream issue #2589).
-podMonitoringCrdStub: true

@@ -20,7 +20,7 @@ substrate:
   # Any fixed level works. Keep it the same on every node.
   selinuxLevel: "s0:c100,c200"
   nodeSelector: {}
-  # Makes the stub of the GKE PodMonitoring CRD. A cluster without the GKE operator needs it.
+  # Makes the stub of the GKE PodMonitoring CRD, in the substrate-install chart. A cluster without the GKE operator needs it.
   podMonitoringCrdStub: true
   # The label that Prometheus selects PodMonitors by. The stack makes the PodMonitors of the control plane when an agent turns on idle suspend.
   podMonitorLabels:

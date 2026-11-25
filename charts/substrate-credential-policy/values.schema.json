@@ -6,9 +6,6 @@
     "controlPlaneNamespace": {
       "type": "string"
     },
-    "podMonitoringCrdStub": {
-      "type": "boolean"
-    },
     "agents": {
       "type": "array",
       "items": {
