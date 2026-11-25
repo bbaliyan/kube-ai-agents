@@ -82,28 +82,28 @@ external="$repo/examples/external-gitlab.yaml"
 render_chain incluster "$incluster"
 is "the in-cluster-gitlab example renders the whole chain" "$?"
 parent="$work/incluster/parent.yaml"
-grep -q 'kind: AppProject' "$parent" && grep -q '^  name: ai-agent$' "$parent"
-is "the parent renders the project ai-agent" "$?"
+grep -q 'kind: AppProject' "$parent" && grep -q '^  name: ai-agents-stack$' "$parent"
+is "the parent renders the shared project ai-agents-stack" "$?"
 grep -q 'github.com/bbaliyan/kube-ai-agents' "$parent" && grep -q 'github.com/bbaliyan/kube-agent-substrate' "$parent"
 is "the project allows this repository and the Substrate repository" "$?"
-[ "$(grep -c '^kind: Application' "$parent")" -eq 2 ] && [ "$(grep -c '^  project: ai-agent$' "$parent")" -eq 2 ]
+[ "$(grep -c '^kind: Application' "$parent")" -eq 2 ] && [ "$(grep -c '^  project: ai-agents-stack$' "$parent")" -eq 2 ]
 is "the parent renders the substrate Application and one Application for the one agent, both in the shared project" "$?"
 ! grep -q '^  project: default$' "$work"/incluster/*.yaml
 is "no Application of the chain uses the default project" "$?"
 python3 - "$parent" <<'PY'
 import sys, yaml
 p = {d["metadata"]["name"]: d["spec"] for d in yaml.safe_load_all(open(sys.argv[1])) if d and d["kind"] == "AppProject"}
-assert sorted(p) == ["ai-agent", "ai-agent-pr-agent"], sorted(p)
-assert [x["namespace"] for x in p["ai-agent"]["destinations"]] == ["argocd", "ate-system"], p["ai-agent"]["destinations"]
+assert sorted(p) == ["ai-agent-pr-agent", "ai-agents-stack"], sorted(p)
+assert [x["namespace"] for x in p["ai-agents-stack"]["destinations"]] == ["argocd", "ate-system"], p["ai-agents-stack"]["destinations"]
 assert [x["namespace"] for x in p["ai-agent-pr-agent"]["destinations"]] == ["pr-agent", "ate-system"], p["ai-agent-pr-agent"]["destinations"]
 for k in ("sourceRepos", "namespaceResourceWhitelist"):
-    assert p["ai-agent-pr-agent"][k] == p["ai-agent"][k], k
+    assert p["ai-agent-pr-agent"][k] == p["ai-agents-stack"][k], k
 assert p["ai-agent-pr-agent"]["clusterResourceWhitelist"] == [], "an agent project allows no cluster-scoped kind"
 PY
 is "the shared project has no agent namespace, and each agent has its own project with its namespace and the control plane namespace, the same repositories and no cluster-scoped kind" "$?"
 grep -A12 '^  clusterResourceWhitelist:' "$parent" | grep -q 'kind: CustomResourceDefinition' && grep -A12 '^  clusterResourceWhitelist:' "$parent" | grep -q 'kind: Namespace'
 is "the project allows the cluster-scoped kinds that the children make" "$?"
-[ "$(wave_of "$parent" Application substrate)" = 0 ] && [ "$(wave_of "$parent" Application pr-agent)" = 1 ] && [ "$(wave_of "$parent" AppProject ai-agent)" = -1 ]
+[ "$(wave_of "$parent" Application substrate)" = 0 ] && [ "$(wave_of "$parent" Application pr-agent)" = 1 ] && [ "$(wave_of "$parent" AppProject ai-agents-stack)" = -1 ]
 is "the project syncs first, then the control plane, then the agents" "$?"
 [ "$(wave_of "$parent" AppProject ai-agent-pr-agent)" -lt "$(wave_of "$parent" Application pr-agent)" ]
 is "the project of an agent has a lower wave than its Application, so removal prunes the Application first" "$?"
