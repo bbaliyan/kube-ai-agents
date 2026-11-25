@@ -92,7 +92,7 @@ render() {
   local dir="$1"
   shift
   mkdir -p "$dir"
-  helm template r "$chart" -f "$chart/ci/aws-values.yaml" -s templates/configmap.yaml "$@" |
+  helm template r "$chart" -f "$chart/../../tests/values/substrate-idle-suspend/bearer-token.yaml" -s templates/configmap.yaml "$@" |
   awk -v dir="$dir" '
     /^  [A-Za-z.-]+: \|$/ { if (out) close(out); name = $1; sub(/:$/, "", name); out = dir "/" name; printf "" > out; next }
     out && /^    / { sub(/^    /, ""); print > out; next }

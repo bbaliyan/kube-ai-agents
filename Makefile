@@ -20,7 +20,7 @@ test-fast: secrets
 hooks:
 	git config core.hooksPath .githooks
 
-YAML_FILES := $(wildcard charts/*/Chart.yaml charts/*/values.yaml charts/*/ci/*.yaml charts/*/tests/*.yaml)
+YAML_FILES := $(wildcard charts/*/Chart.yaml charts/*/values.yaml charts/*/tests/*.yaml tests/values/*/*.yaml)
 
 lint-yaml:
 	yamllint -d '{extends: relaxed, rules: {line-length: disable}}' .github/workflows renovate.json examples $(YAML_FILES)
@@ -30,11 +30,15 @@ lint-yaml:
 # The chart agent needs the values that ai-agent gives it, and ai-agent is rendered with each example.
 charts: export KUBECONFORM_IGNORE_MISSING_SCHEMAS = 1
 charts:
-	for chart in substrate-stack substrate-credential-policy substrate-idle-suspend pr-agent-webhook pr-agent-metrics; do \
+	for chart in substrate-stack substrate-credential-policy pr-agent-webhook pr-agent-metrics; do \
 		$(CHECKS)/helm-kubeconform.sh charts/$$chart; \
 	done
-	helm lint charts/agent --values charts/agent/ci/values.yaml
-	helm template charts/agent --values charts/agent/ci/values.yaml | kubeconform -strict -summary -ignore-missing-schemas
+	for values in tests/values/substrate-idle-suspend/*.yaml; do \
+		helm lint charts/substrate-idle-suspend --values $$values; \
+		helm template charts/substrate-idle-suspend --values $$values | kubeconform -strict -summary -ignore-missing-schemas; \
+	done
+	helm lint charts/agent --values tests/values/agent/minimal.yaml
+	helm template charts/agent --values tests/values/agent/minimal.yaml | kubeconform -strict -summary -ignore-missing-schemas
 	for example in examples/*.yaml; do \
 		helm lint charts/ai-agent --values $$example; \
 		helm template charts/ai-agent --values $$example | kubeconform -strict -summary -ignore-missing-schemas; \
