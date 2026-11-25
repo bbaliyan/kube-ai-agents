@@ -32,7 +32,8 @@ spec:
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
-  name: {{ .name }}
+  # The prefix keeps the name apart from projects that exist for other uses, such as default.
+  name: ai-agent-{{ .name }}
   namespace: argocd
   annotations:
     # Below the wave of the Application of the agent (1). On sync the project exists before its
@@ -49,11 +50,11 @@ spec:
   destinations:
     - server: https://kubernetes.default.svc
       namespace: {{ .namespace }}
-  clusterResourceWhitelist:
-    {{- range $.Values.clusterResources }}
-    - group: {{ .group | quote }}
-      kind: {{ .kind }}
-    {{- end }}
+    # The registration and idle suspend charts put a Role and a RoleBinding here, so the Job and the CronJob can reach the control plane.
+    - server: https://kubernetes.default.svc
+      namespace: {{ $.Values.substrate.namespace }}
+  # No child of an agent makes a cluster-scoped object. The control plane does, and it uses the shared project.
+  clusterResourceWhitelist: []
   namespaceResourceWhitelist:
     - group: "*"
       kind: "*"
