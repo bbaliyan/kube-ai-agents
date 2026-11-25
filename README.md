@@ -12,6 +12,7 @@ You point one Argo CD Application at the chart `ai-agent` and list your agents i
 | `charts/substrate-stack` | The shared control plane: the credential policy, the install and the workers. |
 | `charts/substrate-credential-policy` | The namespace policy of the credential provider, built from the list of agents. It also makes a stub of the PodMonitoring CRD. |
 | `charts/agent` | One agent: the actor, its registration, idle suspend, the webhook shim and the metrics collector. |
+| `charts/substrate-idle-suspend` | A CronJob that suspends idle actors from Prometheus metrics, and the PodMonitors of the control plane. The `agent` chart deploys it for each agent, and `substrate-stack` deploys it once for the PodMonitors. |
 | `charts/pr-agent-webhook` | The GitLab webhook shim, an Envoy proxy. |
 | `charts/pr-agent-metrics` | An OpenTelemetry collector for the metrics of pr-agent. |
 
@@ -59,11 +60,66 @@ pr-agent has counters for commands, tokens and model calls, but no gauge for the
 
 The code is an inline patch, `charts/agent/files/actor_patch.py`. The chart puts it in the command of the actor, next to the patch that turns on `keep_base_url`, and not in a derived image. A derived image is one more image to build, sign and pin. The patch wraps `PRAgent.handle_request`, adds 1 and pushes the metrics at once, runs the command, and subtracts 1 and pushes again. If the meter or the push fails, it logs a warning and runs the command. It does nothing when `OTEL__IS_ENABLED` is not `true`. The upstream gap is issue 5125 in The-PR-Agent/pr-agent (an in-flight gauge). Delete the patch when it ships.
 
-The collector chart `pr-agent-metrics` copies only `ate.actor` to a label and deletes `service.instance.id`, so a restart overwrites an old value and does not leave a second series. A suspend in the middle of a command can leave a stale 1. The idle suspend chart of kube-agent-substrate reads the gauge as the signal `busy`, and it stops reading a value as busy after a cap, so `metricExpiration` stays at its default.
+The collector chart `pr-agent-metrics` copies only `ate.actor` to a label and deletes `service.instance.id`, so a restart overwrites an old value and does not leave a second series. A suspend in the middle of a command can leave a stale 1. The chart `substrate-idle-suspend` reads the gauge as the signal `busy`, and it stops reading a value as busy after a cap, so `metricExpiration` stays at its default.
+
+## Suspend idle actors
+
+Substrate v1.0.1 never suspends an idle actor. The chart `substrate-idle-suspend` runs a CronJob that does it for the actors you list. The `agent` chart deploys it for each agent that sets `agent.idleSuspend.enabled`, with the actor of that agent. The CronJob uses the registration image, which is built in the repository kube-agent-substrate (`images/substrate-registration`) and pulled by digest. A release with an empty `actors` list renders only the PodMonitors, so one release can own the scrape objects of the control plane while other releases list the actors. You can delete the chart when upstream ships its own idle policy.
+
+Warnings:
+
+- An actor that answers at once and keeps working in the background can look idle. Set `idleMinutes` longer than its longest background task.
+- A request that is younger than one scrape interval is not in the data yet. Keep `idleMinutes` well above the scrape interval.
+- Upstream v1.0.1 documents no drain of a running request on suspend. A suspend at that moment can cut the request.
+
+The chart needs a Prometheus that scrapes `atenet-router`, `atenet-egress`, `ate-api-server` and `atelet`. With the Prometheus Operator, the PodMonitors come from `substrate-stack` (see PodMonitors). The PodMonitors are in the control plane namespace, so the `podMonitorNamespaceSelector` of the Prometheus must include it. Upstream makes a scrape object only on GKE.
+
+Through the `agent` chart you set `agent.idleSuspend.prometheusUrl`, `idleMinutes` and `schedule`, and anything else of the chart in `agent.idleSuspend.helmValues`. The `agent` chart also gives the service account of the CronJob the `editor` role in the atespace of the actor, through the registration. The principal is `user:system:serviceaccount:<release namespace>:<agent>-idle-suspend`. Do not make this account a bootstrap owner.
+
+If Prometheus needs a bearer token, set `prometheus.bearerTokenSecret.name`. If it uses a private CA, set `prometheus.caSecret.name`.
+
+| Value | Default | Meaning |
+|---|---|---|
+| `actors` | `[]` | The `atespace` and `name` of each actor to watch. An empty list fails each run. |
+| `schedule` | `"*/5 * * * *"` | Cron schedule of the CronJob |
+| `idleMinutes` | `30` | Minutes with no activity before a suspend |
+| `idleCpuCores` | `0.05` | CPU cores that still count as idle |
+| `suspendMode` | `async` | `async` (the upstream default) or `sync`: how the snapshot becomes durable |
+| `prometheus.url` | `http://prometheus-operated.monitoring.svc:9090` | Base URL of Prometheus |
+| `podMonitors.enabled`, `podMonitors.labels`, `podMonitors.interval` | `false`, `{}`, `30s` | PodMonitors of the Prometheus Operator for the four components that feed the signals. They are made in the control plane namespace. |
+| `prometheus.timeoutSeconds` | `20` | Time limit of one query |
+| `queries.*` | see `values.yaml` | The PromQL of each signal |
+| `image.digest` | all zeros | Digest of the registration image |
+| `activeDeadlineSeconds` | `300` | Time limit of one run |
+| `startingDeadlineSeconds` | `120` | A run that starts later than this is skipped. |
+| `suspend` | `false` | Set to `true` to stop the schedule and keep the chart. |
+
+### When an actor is suspended
+
+A run suspends an actor only when all of these are true:
+
+- `kubectl ate` reads the actor, and the state is `ACTOR_STATE_RUNNING`.
+- Every `health` query returns a number above 0. This proves that each metric source is scraped.
+- Every signal query returns exactly one number, and each says idle.
+
+| Signal | Busy when |
+|---|---|
+| `routed` | The router counted a request for the template of the actor in the idle time. |
+| `resumed` | The API server resumed the actor in the idle time. |
+| `inflight` | Any request or tunnel through the router was open in the idle time. This signal covers every actor. |
+| `egress` | The egress proxy had a request to an outside host in flight in the idle time (counted inside its tunnels, one for each call; an idle open connection does not count). An actor that waits for a model answer is quiet on every other signal, and a suspend closes its outbound connections. This signal covers every actor. A call shorter than a scrape can be missed, and plain TCP passthrough is not counted. |
+| `busy` | Optional, off by default (`busy.enabled`). An agent that reports commands in flight exports a gauge (`busy.metric`, default `pr_agent_commands_in_flight`) that is 1 while a command runs. Its label (`busy.actorLabel`, default `ate_actor`) holds `<atespace>/<actor>`. The signal is busy when the gauge was above 0 at any time in the idle time. A missing series counts as 0. |
+| `cpu` | The CPU rate over the idle time is above `idleCpuCores` (default 0.05). |
+
+A crash or a suspend in the middle of a command can leave the `busy` gauge at 1. If the gauge was above 0 for the whole of the last `busy.maxMinutes` (default 30), the run ignores the `busy` signal and logs one line that names the cap. Set the cap above the longest command. The other signals still apply.
+
+Any other result suspends nothing and fails the run. One failing actor does not stop the run for the other actors. The queries are values in `queries.*`. If your Prometheus names the metrics or labels in another way, change the queries.
+
+Each actor of `substrate-actor` has its own template, so a template signal is an actor signal. If actors share a template, a busy actor keeps the others awake.
 
 ## PodMonitors
 
-When an agent turns on idle suspend, the `substrate-stack` chart makes one Application, `substrate-monitors`. It renders the PodMonitors of the control plane, so no agent owns them. Set the label that Prometheus selects them by in `substrate.podMonitorLabels`.
+When an agent turns on idle suspend, the `substrate-stack` chart makes one Application, `substrate-monitors`. It renders the PodMonitors of the control plane from the chart `substrate-idle-suspend` (an empty `actors` list), so no agent owns them. Set the label that Prometheus selects them by in `substrate.podMonitorLabels`.
 
 ## Tests
 
@@ -74,8 +130,8 @@ make test-commit
 ```
 
 - `make charts` lints each chart and validates what it renders.
-- `make test-charts` runs the helm-unittest tests.
-- `make test-scripts` runs the unit tests of the patch (`tests/test_actor_patch.py`) and `tests/render.sh`. It renders the parent, the stack and each agent for both examples, and it checks the failures.
+- `make test-charts` runs the helm-unittest tests, among them those of `substrate-idle-suspend`.
+- `make test-scripts` runs the unit tests of the patch (`tests/test_actor_patch.py`), the idle suspend script against stubs of `kubectl-ate` and `curl` (`charts/substrate-idle-suspend/tests/idle_suspend_test.sh`, which needs bash and jq) and `tests/render.sh`. It renders the parent, the stack and each agent for both examples, and it checks the failures.
 
 The charts are not applied to a cluster by these checks.
 

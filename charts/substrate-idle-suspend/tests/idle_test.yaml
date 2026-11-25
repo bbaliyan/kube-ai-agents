@@ -1,0 +1,380 @@
+suite: substrate-idle-suspend
+templates:
+  - templates/cronjob.yaml
+  - templates/configmap.yaml
+  - templates/rbac.yaml
+  - templates/podmonitor.yaml
+values:
+  - ../ci/aws-values.yaml
+tests:
+  - it: renders no PodMonitor by default
+    template: templates/podmonitor.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders a PodMonitor for each component of the control plane that feeds a signal
+    template: templates/podmonitor.yaml
+    set:
+      podMonitors:
+        enabled: true
+        labels:
+          release: prometheus
+    asserts:
+      - hasDocuments:
+          count: 4
+      - equal:
+          path: metadata.namespace
+          value: ate-system
+      - equal:
+          path: metadata.labels.release
+          value: prometheus
+      - equal:
+          path: spec.podTargetLabels
+          value: [app]
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-substrate-idle-suspend-atenet-router
+        documentIndex: 0
+      - equal:
+          path: spec.podMetricsEndpoints
+          value:
+            - port: metrics
+              interval: 30s
+            - port: envoy-metrics
+              path: /stats/prometheus
+              interval: 30s
+        documentIndex: 0
+      - equal:
+          path: spec.podMetricsEndpoints
+          value:
+            - port: metrics
+              interval: 30s
+            - port: envoy-metrics
+              path: /stats/prometheus
+              interval: 30s
+        documentIndex: 1
+      - equal:
+          path: spec.podMetricsEndpoints
+          value:
+            - port: prometheus
+              interval: 30s
+        documentIndex: 2
+      - equal:
+          path: spec.selector.matchLabels.app
+          value: atelet
+        documentIndex: 3
+
+  - it: renders the PodMonitors and nothing else when it has no actors
+    set:
+      actors: []
+      podMonitors:
+        enabled: true
+    asserts:
+      - hasDocuments:
+          count: 4
+        template: templates/podmonitor.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/cronjob.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/configmap.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/rbac.yaml
+
+  - it: rejects an interval that is not a duration
+    template: templates/podmonitor.yaml
+    set:
+      podMonitors:
+        enabled: true
+        interval: fast
+    asserts:
+      - failedTemplate:
+          errorPattern: "interval"
+  - it: never lets two runs overlap and never retries a failed run
+    template: templates/cronjob.yaml
+    asserts:
+      - equal:
+          path: spec.concurrencyPolicy
+          value: Forbid
+      - equal:
+          path: spec.jobTemplate.spec.backoffLimit
+          value: 0
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.restartPolicy
+          value: Never
+
+  - it: takes the schedule from the values
+    template: templates/cronjob.yaml
+    set:
+      schedule: "7 * * * *"
+    asserts:
+      - equal:
+          path: spec.schedule
+          value: "7 * * * *"
+
+  - it: names the ConfigMap with a hash of the inputs and mounts that ConfigMap
+    template: templates/cronjob.yaml
+    asserts:
+      - matchRegex:
+          path: spec.jobTemplate.spec.template.spec.volumes[0].configMap.name
+          pattern: "^RELEASE-NAME-substrate-idle-suspend-[a-f0-9]{10}$"
+
+  - it: makes the ConfigMap immutable
+    template: templates/configmap.yaml
+    asserts:
+      - equal:
+          path: immutable
+          value: true
+      - matchRegex:
+          path: metadata.name
+          pattern: "^RELEASE-NAME-substrate-idle-suspend-[a-f0-9]{10}$"
+
+  - it: takes the idle time from the values
+    template: templates/configmap.yaml
+    set:
+      idleMinutes: 31
+    asserts:
+      - matchRegex:
+          path: data["config.env"]
+          pattern: "IDLE_MINUTES=31"
+
+  - it: lists the actors and the idle settings in the ConfigMap
+    template: templates/configmap.yaml
+    values:
+      - ../ci/onprem-values.yaml
+    asserts:
+      - equal:
+          path: data.actors
+          value: |
+            reviews/pr-review
+            reviews/triage
+      - matchRegex:
+          path: data["config.env"]
+          pattern: "SUSPEND_MODE=sync"
+      - matchRegex:
+          path: data["config.env"]
+          pattern: "PROMETHEUS_URL=http://prometheus.monitoring.svc:9090\n"
+
+  - it: ships the script and one file for each signal query
+    template: templates/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["idle-suspend.sh"]
+          pattern: "Fail-safe"
+      - isNotEmpty:
+          path: data["query.health.envoy"]
+      - isNotEmpty:
+          path: data["query.health.router"]
+      - isNotEmpty:
+          path: data["query.health.ateapi"]
+      - isNotEmpty:
+          path: data["query.health.atelet"]
+      - isNotEmpty:
+          path: data["query.routed"]
+      - isNotEmpty:
+          path: data["query.resumed"]
+      - isNotEmpty:
+          path: data["query.inflight"]
+      - isNotEmpty:
+          path: data["query.cpu"]
+
+  - it: leaves the busy signal off by default
+    template: templates/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.env"]
+          pattern: "BUSY_ENABLED=false"
+      - notExists:
+          path: data["query.busy"]
+      - notExists:
+          path: data["query.busy.cap"]
+
+  - it: renders the busy queries from the metric, the label and the cap
+    template: templates/configmap.yaml
+    set:
+      busy:
+        enabled: true
+        metric: my_commands
+        actorLabel: who
+        maxMinutes: 45
+    asserts:
+      - matchRegex:
+          path: data["config.env"]
+          pattern: "BUSY_ENABLED=true\nBUSY_MAX_MINUTES=45"
+      - equal:
+          path: data["query.busy"]
+          value: |
+            max_over_time((sum(my_commands{who="@ACTOR@"}) or vector(0))[@WINDOW@:15s])
+      - equal:
+          path: data["query.busy.cap"]
+          value: |
+            min_over_time((sum(my_commands{who="@ACTOR@"}) or vector(0))[@CAP@:15s])
+
+  - it: defaults the busy cap to 30 minutes
+    template: templates/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.env"]
+          pattern: "BUSY_MAX_MINUTES=30"
+
+  - it: rejects a busy cap below 1 minute
+    template: templates/configmap.yaml
+    set:
+      busy.maxMinutes: 0
+    asserts:
+      - failedTemplate: {}
+
+  - it: rejects a busy metric name with a quote
+    template: templates/configmap.yaml
+    set:
+      busy.metric: 'a"b'
+    asserts:
+      - failedTemplate: {}
+
+  - it: runs the pinned image with the service account token as the credential
+    template: templates/cronjob.yaml
+    asserts:
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].image
+          value: ghcr.io/bbaliyan/kube-agent-substrate/substrate-registration@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.volumes[2].projected.sources[0].serviceAccountToken.audience
+          value: api.ate-system.svc
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.serviceAccountName
+          value: RELEASE-NAME-substrate-idle-suspend
+
+  - it: passes the Prometheus token from a Secret as a file
+    template: templates/cronjob.yaml
+    asserts:
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: PROMETHEUS_TOKEN_FILE
+            value: /var/run/prometheus/token
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.volumes
+          content:
+            name: prometheus-token
+            secret:
+              secretName: prometheus-reader
+
+  - it: asks for no Prometheus credential when no Secret is named
+    template: templates/cronjob.yaml
+    set:
+      prometheus.bearerTokenSecret.name: ""
+    asserts:
+      - notContains:
+          path: spec.jobTemplate.spec.template.spec.volumes
+          content:
+            name: prometheus-token
+            secret:
+              secretName: prometheus-reader
+
+  - it: runs without root, with a read-only root filesystem and no capability
+    template: templates/cronjob.yaml
+    asserts:
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.securityContext.runAsNonRoot
+          value: true
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].securityContext.capabilities.drop
+          value: [ALL]
+
+  - it: grants the account its own namespaced role for the API server and nothing broader
+    template: templates/rbac.yaml
+    documentSelector:
+      path: kind
+      value: Role
+    asserts:
+      - equal:
+          path: metadata.namespace
+          value: ate-system
+      - equal:
+          path: rules
+          value:
+            - apiGroups: [""]
+              resources: [services]
+              resourceNames: [api]
+              verbs: [get]
+            - apiGroups: [""]
+              resources: [pods]
+              verbs: [list]
+            - apiGroups: [""]
+              resources: [pods/portforward]
+              verbs: [get, create]
+
+  - it: binds the role to the service account of the CronJob and creates no cluster role
+    template: templates/rbac.yaml
+    asserts:
+      - hasDocuments:
+          count: 3
+      - equal:
+          path: subjects[0].name
+          value: RELEASE-NAME-substrate-idle-suspend
+        documentSelector:
+          path: kind
+          value: RoleBinding
+      - equal:
+          path: metadata.namespace
+          value: ate-system
+        documentSelector:
+          path: kind
+          value: RoleBinding
+
+  - it: rejects a Prometheus URL that is not an http or https URL
+    template: templates/cronjob.yaml
+    set:
+      prometheus.url: prometheus.example.com
+    asserts:
+      - failedTemplate: {}
+
+  - it: rejects an actor without an atespace
+    template: templates/cronjob.yaml
+    set:
+      actors:
+        - name: pr-review
+    asserts:
+      - failedTemplate: {}
+
+  - it: rejects a suspend mode that kubectl ate does not know
+    template: templates/cronjob.yaml
+    set:
+      suspendMode: fast
+    asserts:
+      - failedTemplate: {}
+
+  - it: rejects a negative CPU threshold and a zero idle time
+    template: templates/cronjob.yaml
+    set:
+      idleCpuCores: -1
+    asserts:
+      - failedTemplate: {}
+
+  - it: rejects an image without a digest
+    template: templates/cronjob.yaml
+    set:
+      image.digest: latest
+    asserts:
+      - failedTemplate: {}
+
+  - it: rejects an unknown value
+    template: templates/cronjob.yaml
+    set:
+      idelMinutes: 5
+    asserts:
+      - failedTemplate: {}
+
+  - it: rejects substrate.version, which the digest-only image reference replaced
+    template: templates/cronjob.yaml
+    set:
+      substrate.version: v1.0.1
+    asserts:
+      - failedTemplate:
+          errorPattern: "version"

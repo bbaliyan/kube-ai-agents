@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["actors", "schedule", "idleMinutes", "idleCpuCores", "suspendMode", "prometheus", "queries", "substrate", "image"],
+  "properties": {
+    "podMonitors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "labels": { "type": "object", "additionalProperties": { "type": "string" } },
+        "interval": { "type": "string", "pattern": "^([0-9]+(h|m|s))+$" }
+      }
+    },
+    "busy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "metric": { "type": "string", "pattern": "^[a-zA-Z_:][a-zA-Z0-9_:]*$" },
+        "actorLabel": { "type": "string", "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$" },
+        "maxMinutes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "actors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "atespace"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 63 },
+          "atespace": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 63 }
+        }
+      }
+    },
+    "schedule": { "type": "string", "minLength": 1 },
+    "idleMinutes": { "type": "integer", "minimum": 1 },
+    "idleCpuCores": { "type": "number", "minimum": 0 },
+    "suspendMode": { "enum": ["async", "sync"] },
+    "prometheus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": { "type": "string", "pattern": "^https?://[^\\s]+$", "description": "Base URL of Prometheus." },
+        "bearerTokenSecret": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "name": { "type": "string" }, "key": { "type": "string", "minLength": 1 } }
+        },
+        "caSecret": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "name": { "type": "string" }, "key": { "type": "string", "minLength": 1 } }
+        },
+        "timeoutSeconds": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "queries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["health", "routed", "resumed", "inflight", "egress", "cpu"],
+      "properties": {
+        "health": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["envoy", "egress", "router", "ateapi", "atelet"],
+          "properties": {
+            "envoy": { "type": "string", "minLength": 1 },
+            "egress": { "type": "string", "minLength": 1 },
+            "router": { "type": "string", "minLength": 1 },
+            "ateapi": { "type": "string", "minLength": 1 },
+            "atelet": { "type": "string", "minLength": 1 }
+          }
+        },
+        "routed": { "type": "string", "minLength": 1 },
+        "resumed": { "type": "string", "minLength": 1 },
+        "inflight": { "type": "string", "minLength": 1 },
+        "egress": { "type": "string", "minLength": 1 },
+        "cpu": { "type": "string", "minLength": 1 }
+      }
+    },
+    "substrate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["namespace"],
+      "properties": {
+        "namespace": { "type": "string", "enum": ["ate-system"] }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "digest"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "Digest of the registration image. A tag alone is rejected."
+        }
+      }
+    },
+    "activeDeadlineSeconds": { "type": "integer", "minimum": 1 },
+    "startingDeadlineSeconds": { "type": "integer", "minimum": 1 },
+    "successfulJobsHistoryLimit": { "type": "integer", "minimum": 0 },
+    "failedJobsHistoryLimit": { "type": "integer", "minimum": 0 },
+    "suspend": { "type": "boolean" },
+    "resources": { "type": "object" },
+    "nodeSelector": { "type": "object" },
+    "tolerations": { "type": "array" },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "name": { "type": "string" } }
+    }
+  }
+}

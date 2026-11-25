@@ -1,0 +1,7 @@
+apiVersion: v2
+name: substrate-idle-suspend
+description: Suspends idle running actors of Agent Substrate. Delete this chart when upstream ships its own idle policy.
+type: application
+version: 0.1.0
+# renovate: datasource=github-tags depName=agent-substrate/substrate
+appVersion: v1.0.1

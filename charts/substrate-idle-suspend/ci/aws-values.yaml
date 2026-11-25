@@ -1,0 +1,14 @@
+# Idle-suspend values. Use the same atespace and name as in the substrate-actor release.
+image:
+  digest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+actors:
+  - atespace: reviews
+    name: pr-review
+schedule: "*/5 * * * *"
+idleMinutes: 30
+idleCpuCores: 0.05
+prometheus:
+  url: https://prometheus.example.com
+  bearerTokenSecret:
+    name: prometheus-reader
+    key: token

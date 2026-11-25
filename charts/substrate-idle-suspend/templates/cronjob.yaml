@@ -1,0 +1,101 @@
+{{- if .Values.actors }}
+{{- $config := printf "%s-%s" (include "substrate-idle-suspend.fullname" .) (include "substrate-idle-suspend.hash" .) -}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "substrate-idle-suspend.fullname" . }}
+  labels:
+    {{- include "substrate-idle-suspend.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.schedule | quote }}
+  # Forbid: a run that is still going must not overlap with the next one.
+  concurrencyPolicy: Forbid
+  suspend: {{ .Values.suspend }}
+  startingDeadlineSeconds: {{ .Values.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: {{ .Values.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.failedJobsHistoryLimit }}
+  jobTemplate:
+    metadata:
+      labels:
+        {{- include "substrate-idle-suspend.labels" . | nindent 8 }}
+    spec:
+      # No retry: the next schedule is the retry, and a failed run suspends nothing.
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "substrate-idle-suspend.labels" . | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "substrate-idle-suspend.serviceAccountName" . }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: idle-suspend
+              image: {{ include "substrate-idle-suspend.image" . }}
+              command: [bash, /config/idle-suspend.sh]
+              env:
+                - {name: SUBSTRATE_NAMESPACE, value: {{ .Values.substrate.namespace | quote }}}
+                - {name: CONFIG_DIR, value: /config}
+                - {name: TOKEN_FILE, value: /var/run/ate/token}
+                {{- if .Values.prometheus.bearerTokenSecret.name }}
+                - {name: PROMETHEUS_TOKEN_FILE, value: /var/run/prometheus/{{ .Values.prometheus.bearerTokenSecret.key }}}
+                {{- end }}
+                {{- if .Values.prometheus.caSecret.name }}
+                - {name: PROMETHEUS_CA_FILE, value: /var/run/prometheus-ca/{{ .Values.prometheus.caSecret.key }}}
+                {{- end }}
+              {{- with .Values.resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              securityContext:
+                {{- include "substrate-idle-suspend.containerSecurity" . | nindent 16 }}
+              volumeMounts:
+                - {name: config, mountPath: /config, readOnly: true}
+                - {name: ate-api, mountPath: /var/run/ate, readOnly: true}
+                - {name: tmp, mountPath: /tmp}
+                {{- if .Values.prometheus.bearerTokenSecret.name }}
+                - {name: prometheus-token, mountPath: /var/run/prometheus, readOnly: true}
+                {{- end }}
+                {{- if .Values.prometheus.caSecret.name }}
+                - {name: prometheus-ca, mountPath: /var/run/prometheus-ca, readOnly: true}
+                {{- end }}
+          volumes:
+            - name: config
+              configMap:
+                name: {{ $config }}
+                defaultMode: 0555
+            - name: tmp
+              emptyDir: {}
+            # The token authenticates the run to ate-api-server. Its audience is the name of the API Service.
+            - name: ate-api
+              projected:
+                sources:
+                  - serviceAccountToken:
+                      audience: api.{{ .Values.substrate.namespace }}.svc
+                      expirationSeconds: 3600
+                      path: token
+            {{- if .Values.prometheus.bearerTokenSecret.name }}
+            - name: prometheus-token
+              secret:
+                secretName: {{ .Values.prometheus.bearerTokenSecret.name }}
+            {{- end }}
+            {{- if .Values.prometheus.caSecret.name }}
+            - name: prometheus-ca
+              secret:
+                secretName: {{ .Values.prometheus.caSecret.name }}
+            {{- end }}
+{{- end }}
