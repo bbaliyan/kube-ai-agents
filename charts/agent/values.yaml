@@ -80,9 +80,6 @@ agent:
   # modelRetries: tries again after a refused connection or a 429 or 5xx answer, 0 to 10.
   retrySameModelOnTimeout: null
   modelRetries: null
-  # Optional. GitLab user ids whose events pr-agent ignores. Put the id of the review bot here: its own comments
-  # send a webhook call each, and pr-agent would otherwise look at every one (setting gitlab.ignore_user_ids).
-  ignoreUserIds: []
   # The GitLab address that the actor uses. The egress policy allows its host and sets the token there.
   gitlabUrl: ""
   # More GitLab addresses that the actor may call, with the same token. An https address needs egressTrustBundle.

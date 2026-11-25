@@ -381,8 +381,6 @@ is "with fallbackModels the actor fails over at once, and the timeout defaults t
 out="$(agent_chart --set 'agent.fallbackModels={ollama/small:8b}' --set agent.retrySameModelOnTimeout=true --set agent.modelRetries=3 --show-only templates/actor.yaml)"; plain="$(agent_chart --set agent.modelRetries=0 --show-only templates/actor.yaml)"
 grep -q 'CONFIG__RETRY_SAME_MODEL_ON_TIMEOUT: "true"' <<<"$out" && grep -q 'CONFIG__NUM_RETRIES: "3"' <<<"$out" && grep -q 'CONFIG__NUM_RETRIES: "0"' <<<"$plain"
 is "agent.retrySameModelOnTimeout and agent.modelRetries override the failover defaults" "$?"
-grep -q 'GITLAB__IGNORE_USER_IDS: 12,34' <<<"$(agent_chart --set 'agent.ignoreUserIds={12,34}' --show-only templates/actor.yaml)" && ! grep -q 'IGNORE_USER_IDS' <<<"$(agent_chart --show-only templates/actor.yaml)"
-is "agent.ignoreUserIds sets the GitLab users that pr-agent ignores, and is absent by default" "$?"
 agent_fails "a model retry count above 10 fails" 'agent.modelRetries must be' --set agent.modelRetries=11
 agent_fails "a fallback model with another prefix fails" 'agent.fallbackModels must use the same prefix' --set 'agent.fallbackModels={openai/other}'
 agent_fails "a model timeout that is not a number fails" 'agent.modelTimeoutSeconds' --set agent.modelTimeoutSeconds=abc
