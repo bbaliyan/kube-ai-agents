@@ -654,7 +654,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "label_replace(label_replace(sum by (model, fallback)((((pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} - pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} offset $__interval) >= 0) or (pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} unless pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} offset $__interval) or (pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} < pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} offset $__interval))), \"role\", \" (fallback)\", \"fallback\", \"true\"), \"role\", \"\", \"fallback\", \"false\") or (label_replace(vector(0), \"model\", \"No command answered yet\", \"\", \"\") unless sum(last_over_time(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[$__range])))",
+          "expr": "label_replace(label_replace(sum by (model, fallback)((((pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} - pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} offset $__interval) >= 0) or (pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} unless pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} offset $__interval) or (pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} < pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} offset $__interval))), \"role\", \" (fallback)\", \"fallback\", \"true\"), \"role\", \"\", \"fallback\", \"false\") or (label_replace(vector(0) unless sum(last_over_time(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[$__range])), \"model\", \"No command answered yet\", \"\", \"\"))",
           "legendFormat": "{{model}}{{role}}"
         }
       ],
