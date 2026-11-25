@@ -660,7 +660,7 @@
       "id": 11,
       "type": "table",
       "title": "Models that answered, last 24 hours",
-      "description": "Each model that answered a command in the last 24 hours, and how many commands it answered. A fallback model has fallback set to true.",
+      "description": "Each model that answered a command in the last 24 hours, and how many commands it answered. Role says whether it was the main model of the agent or a fallback model that took over because the main model failed or timed out.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -673,12 +673,67 @@
       },
       "fieldConfig": {
         "defaults": {
-          "decimals": 0
+          "decimals": 0,
+          "custom": {
+            "align": "auto"
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Role"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "false": {
+                        "text": "Main model",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "true": {
+                        "text": "Fallback model",
+                        "color": "orange",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Commands"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,
+        "cellHeight": "sm",
         "sortBy": [
           {
             "displayName": "Commands",
@@ -693,9 +748,14 @@
             "excludeByName": {
               "Time": true
             },
+            "indexByName": {
+              "model": 0,
+              "fallback": 1,
+              "Value": 2
+            },
             "renameByName": {
               "model": "Model",
-              "fallback": "Fallback",
+              "fallback": "Role",
               "Value": "Commands"
             }
           }
