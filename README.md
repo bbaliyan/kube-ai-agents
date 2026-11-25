@@ -88,8 +88,8 @@ Each agent can bring a simple Grafana dashboard, `Agent: <name>`. It shows numbe
 - Tokens read by the model, and tokens written by the model, in the last 24 hours. Two plain numbers: a review reads far more than it writes.
 - Commands that failed, in the last 24 hours, as a share of the commands that ended. A command that pr-agent skipped does not count.
 - Answered by a fallback model, in the last 24 hours, as a share of all commands. A high value means the main model fails or times out.
-- A table of the models that answered in the last 24 hours, and a chart of the model that answered over time. When you change the model, the old name stops and the new name starts. A fallback model shows as `(fallback)`.
-- Commands that ended, by outcome: ok and failed.
+- A table of the models that answered in the last 24 hours, and a timeline with one row for each model, which shows when each one answered. When you change the model, the old row stops and the new row starts. A fallback model has its own orange row, named `(fallback)`.
+- Failed commands over time, in bars. An empty chart means no failures.
 
 The model and the outcome come from the actor patch (see "Reporting a running command"). pr-agent keeps both in its run details and does not report them as metrics. The patch adds the counters `pr_agent_commands_finished_total` (label `outcome`) and `pr_agent_commands_by_model_total` (labels `model` and `fallback`).
 
