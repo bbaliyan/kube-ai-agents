@@ -1,0 +1,15 @@
+{{- if .Values.dashboard.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-dashboard
+  labels:
+    # The Grafana sidecar loads every ConfigMap with this label.
+    grafana_dashboard: "1"
+data:
+  dashboard.json: |
+    {{- .Files.Get "files/dashboard.json"
+      | replace "__NAME__" (required "dashboard.name is required when the dashboard is on" .Values.dashboard.name)
+      | replace "__ACTOR__" (required "dashboard.actor is required when the dashboard is on, in the form <atespace>/<actor name>" .Values.dashboard.actor)
+      | nindent 4 }}
+{{- end }}

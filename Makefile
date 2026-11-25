@@ -42,7 +42,7 @@ charts:
 
 # What the charts render, as declared tests (helm-unittest).
 test-charts:
-	helm unittest charts/pr-agent-webhook charts/substrate-credential-policy charts/substrate-idle-suspend
+	helm unittest charts/pr-agent-metrics charts/pr-agent-webhook charts/substrate-credential-policy charts/substrate-idle-suspend
 
 # What the charts hand to each other: the parent, the stack and the agents. The idle suspend script runs
 # against stubs of kubectl-ate and curl (bash and jq are in the kube-devenv image).

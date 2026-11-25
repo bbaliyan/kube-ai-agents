@@ -62,6 +62,20 @@ The code is an inline patch, `charts/agent/files/actor_patch.py`. The chart puts
 
 The collector chart `pr-agent-metrics` copies only `ate.actor` to a label and deletes `service.instance.id`, so a restart overwrites an old value and does not leave a second series. A suspend in the middle of a command can leave a stale 1. The chart `substrate-idle-suspend` reads the gauge as the signal `busy`, and it stops reading a value as busy after a cap, so `metricExpiration` stays at its default.
 
+## Dashboard
+
+Each agent can bring a simple Grafana dashboard, `Agent: <name>`. It shows four numbers and three charts:
+
+- Working right now? shows Busy or Idle.
+- Reviews in the last 24 hours.
+- Model calls per review. A review that is cut into chunks shows a higher number.
+- Tokens used in the last 24 hours.
+- Work done per hour: reviews, descriptions and improvement suggestions.
+- Busy time: when the agent runs a command.
+- Tokens per hour: input and output.
+
+To turn it on, set `agent.dashboard.enabled: true`. It needs `agent.metricsCollector.enabled: true`. The chart `pr-agent-metrics` makes a ConfigMap with the label `grafana_dashboard: "1"`, and the Grafana sidecar loads it.
+
 ## Suspend idle actors
 
 Substrate v1.0.1 never suspends an idle actor. The chart `substrate-idle-suspend` runs a CronJob that does it for the actors you list. The `agent` chart deploys it for each agent that sets `agent.idleSuspend.enabled`, with the actor of that agent. The CronJob uses the registration image, which is built in the repository kube-agent-substrate (`images/substrate-registration`) and pulled by digest. A release with an empty `actors` list renders only the PodMonitors, so one release can own the scrape objects of the control plane while other releases list the actors. You can delete the chart when upstream ships its own idle policy.

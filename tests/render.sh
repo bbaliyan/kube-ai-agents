@@ -327,6 +327,26 @@ grep -q 'generateToken: false' <<<"$out" && grep -q 'name: metrics-token' <<<"$o
 is "a metrics Secret of your own turns the generated token off" "$?" "$out"
 ! grep -q 'name: a-metrics' <<<"$(agent_chart)"
 is "the metrics Application is off by default" "$?"
+out="$(agent_chart --set agent.metricsCollector.enabled=true --set agent.dashboard.enabled=true --set agent.atespace=ate --set agent.actorName=rev --show-only templates/metrics.yaml)"
+grep -q 'actor: ate/rev' <<<"$out" && grep -A4 'dashboard:' <<<"$out" | grep -q 'enabled: true'
+is "the dashboard value reaches the metrics chart with the actor" "$?" "$out"
+out="$(agent_chart --set agent.metricsCollector.enabled=true --show-only templates/metrics.yaml)"
+grep -A4 'dashboard:' <<<"$out" | grep -q 'enabled: false'
+is "the dashboard is off by default" "$?" "$out"
+agent_fails "the dashboard without the collector fails" 'agent.dashboard.enabled needs agent.metricsCollector.enabled' --set agent.dashboard.enabled=true
+! helm template m "$repo/charts/pr-agent-metrics" | grep -q 'grafana_dashboard'
+is "the metrics chart makes no dashboard ConfigMap by default" "$?"
+helm template reviewer-metrics "$repo/charts/pr-agent-metrics" --set dashboard.enabled=true --set dashboard.name=reviewer --set dashboard.actor=ate/rev --show-only templates/dashboard.yaml \
+  | python3 -c '
+import json, sys, yaml
+cm = yaml.safe_load(sys.stdin)
+d = json.loads(cm["data"]["dashboard.json"])
+assert cm["metadata"]["labels"]["grafana_dashboard"] == "1"
+assert d["uid"] == "ai-agent-reviewer" and d["title"] == "Agent: reviewer" and len(d["panels"]) == 7
+exprs = [t["expr"] for p in d["panels"] for t in p["targets"]]
+assert all("ate_actor=\"ate/rev\"" in e for e in exprs), exprs
+'
+is "the dashboard ConfigMap holds JSON with the uid, the title, 7 panels and the actor in every query" "$?"
 ! grep -q 'PR_REVIEWER__ENABLE_LARGE_PR_CHUNKING' <<<"$(agent_chart --set agent.largeReviews=false --show-only templates/actor.yaml)" && grep -q 'PR_REVIEWER__MAX_NUMBER_OF_CALLS: "5"' <<<"$(agent_chart --set agent.maxReviewCalls=5 --show-only templates/actor.yaml)"
 is "agent.largeReviews and agent.maxReviewCalls set the chunking" "$?"
 grep -q 'CONFIG__AI_TIMEOUT: "300"' <<<"$(agent_chart --set agent.modelTimeoutSeconds=300 --show-only templates/actor.yaml)"
