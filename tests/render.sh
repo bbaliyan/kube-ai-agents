@@ -358,7 +358,9 @@ assert not any("[24h]" in e for e in exprs), "a panel has a fixed 24 hour window
 assert all(e.count("increase(") == 2 * e.count("min_over_time(") for e in exprs), "a panel counts with a bare increase(), which loses the first value of a new series"
 assert all("increase(" not in e for e in exprs if "$__interval" in e), "a chart counts a bucket with increase(), which loses a jump between two buckets"
 assert all("offset $__interval" in e for e in exprs if "$__interval" in e and "pr_agent_" in e), "a bucket count must compare the counter with the counter one bucket ago"
-assert any("label_replace(vector(0) unless sum(" in e for e in exprs), "the placeholder row of the timeline must be removed when the agent has data"
+timeline = [x for x in d["panels"] if x["id"] == 12][0]
+assert any(o["matcher"]["options"] == "No command answered yet" and o["properties"][0]["id"] == "custom.hideFrom" and o["properties"][0]["value"]["viz"] for o in timeline["fieldConfig"]["overrides"]), "the placeholder row of the timeline must be hidden from the chart"
+assert "No command answered yet" in timeline["targets"][0]["expr"], "the timeline needs the placeholder so that it never has an empty result"
 assert d["time"]["from"] == "now-24h" and "ai-agent" in d["tags"] and d["graphTooltip"] == 1
 assert all("ate_actor=\"ate/rev\"" in e for e in exprs), exprs
 '
