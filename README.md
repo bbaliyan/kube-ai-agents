@@ -63,13 +63,17 @@ model: ollama/qwen3-coder:30b
 fallbackModels: [ollama/qwen3:8b]
 ```
 
+## Many reviews at once
+
+pr-agent runs each command as a task on the event loop of a worker process, with no queue and no limit. A worker also does some blocking GitLab calls on that loop, so one busy worker answers new webhook calls slowly, and GitLab gives up on a call after 10 seconds. To handle more reviews at once, run more worker processes: set `workers` on the agent (default 2) and give the actor the size for them with `cpuMillicores` and `memoryBytes`. Start with about 1 CPU and 1 GiB for each worker, and make the worker pool of Agent Substrate (`substrate.workers.cpu` and `memory`) about twice the size of the actor. The metrics carry the id of the worker, so the workers do not overwrite each other (see "Reporting a running command").
+
 ## Reporting a running command
 
 pr-agent has counters for commands, tokens and model calls, but no gauge for the commands that run now. With metrics on, the actor reports one: the gauge `pr_agent_commands_in_flight` (OpenTelemetry name `pr_agent.commands_in_flight`, unit `{command}`). It is 1 while a command runs, and 0 when it ends. It has the label `ate_actor`, in the form `<atespace>/<actor name>`, from the resource attribute `OTEL_RESOURCE_ATTRIBUTES`. The chart does not use the template name, because that name is a hash of the template, and the env is part of the template.
 
 The code is an inline patch, `charts/agent/files/actor_patch.py`. The chart puts it in the command of the actor, next to the patch that turns on `keep_base_url`, and not in a derived image. A derived image is one more image to build, sign and pin. The patch wraps `PRAgent.handle_request`, adds 1 and pushes the metrics at once, runs the command, and subtracts 1 and pushes again. If the meter or the push fails, it logs a warning and runs the command. It does nothing when `OTEL__IS_ENABLED` is not `true`. The upstream gap is issue 5125 in The-PR-Agent/pr-agent (an in-flight gauge). Delete the patch when it ships.
 
-The collector chart `pr-agent-metrics` copies only `ate.actor` to a label and deletes `service.instance.id`, so a restart overwrites an old value and does not leave a second series. A suspend in the middle of a command can leave a stale 1. The chart `substrate-idle-suspend` reads the gauge as the signal `busy`, and it stops reading a value as busy after a cap, so `metricExpiration` stays at its default.
+Each pr-agent worker process has its own meter, so the actor patch gives each worker its own `service.instance.id`, and the collector chart `pr-agent-metrics` copies it to the label `worker` next to `ate_actor`. The counters and the gauge of an actor are the sum over its workers, and the dashboard and the idle suspend already sum. After a restart of a worker, its old series stays until `metricExpiration`. A suspend in the middle of a command can leave a stale 1. The chart `substrate-idle-suspend` reads the gauge as the signal `busy`, and it stops reading a value as busy after a cap, so `metricExpiration` stays at its default.
 
 ## Dashboard
 

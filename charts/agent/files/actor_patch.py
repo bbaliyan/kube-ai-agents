@@ -54,4 +54,21 @@ def _install_in_flight_gauge():
     PRAgent.handle_request = handle_request
 
 
+def _name_each_worker():
+    """Give each gunicorn worker its own service.instance.id, so the workers do not overwrite each other's series.
+
+    The master forks the workers, and the meter of a worker is made later, inside it, from OTEL_RESOURCE_ATTRIBUTES.
+    A hook that runs in each child, right after the fork, adds the id of the process there.
+    """
+    if os.environ.get("OTEL__IS_ENABLED", "").lower() != "true":
+        return
+
+    def in_child():
+        attributes = [a for a in os.environ.get("OTEL_RESOURCE_ATTRIBUTES", "").split(",") if a]
+        os.environ["OTEL_RESOURCE_ATTRIBUTES"] = ",".join(attributes + [f"service.instance.id={os.getpid()}"])
+
+    os.register_at_fork(after_in_child=in_child)
+
+
+_name_each_worker()
 _install_in_flight_gauge()

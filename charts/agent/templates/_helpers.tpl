@@ -86,8 +86,6 @@
 {{- $_ := set $env "OTEL__EXPORTER_TYPE" "otlp" -}}
 {{- $_ := set $env "OTEL__OTLP_ENDPOINT" $metricsEndpoint -}}
 {{- $_ := set $env "OTEL__ENVIRONMENT" $p.metricsEnvironment -}}
-{{- /* Every gunicorn worker has its own meter and no instance id, so two workers would overwrite each other's counters. */ -}}
-{{- $_ := set $env "GUNICORN_WORKERS" "1" -}}
 {{- $metricsRule := dict "protocol" $metrics.protocol "hostnames" (list $metrics.host) "ports" (list $metrics.port) -}}
 {{- if $metricsSecret }}
 {{- /* The gateway replaces an Authorization header the actor sends and never adds one. */ -}}
@@ -103,6 +101,10 @@
 {{- $timeout := int $p.modelTimeoutSeconds -}}
 {{- if lt $timeout 1 }}{{ fail "agent.modelTimeoutSeconds must be a whole number of seconds, at least 1" }}{{ end -}}
 {{- $_ := set $env "CONFIG__AI_TIMEOUT" ($timeout | toString) -}}
+{{- /* Each gunicorn worker is one process with one event loop. The metrics carry the id of the worker (actor_patch.py), so the workers do not overwrite each other. */ -}}
+{{- $workers := int $p.workers -}}
+{{- if lt $workers 1 }}{{ fail "agent.workers must be a whole number, at least 1" }}{{ end -}}
+{{- $_ := set $env "GUNICORN_WORKERS" ($workers | toString) -}}
 {{- /* With a fallback, do not replay a call on the model that just failed: move on at once. */ -}}
 {{- $retryOnTimeout := $p.retrySameModelOnTimeout -}}
 {{- $modelRetries := $p.modelRetries -}}
