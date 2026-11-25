@@ -27,6 +27,21 @@ data:
         metrics:
           metric:
             - 'not IsMatch(name, "^pr_agent[.]")'
+      # The actor names itself in the resource attribute ate.actor. Copy only that one to a datapoint attribute,
+      # so the gauge carries a label per actor and no other label changes.
+      transform/actor:
+        metric_statements:
+          - context: datapoint
+            statements:
+              - set(attributes["ate.actor"], resource.attributes["ate.actor"]) where resource.attributes["ate.actor"] != nil
+      # Drop the identity of the process. After a restart, the new value then overwrites the old one, and the
+      # scrape page does not keep a second series of a gauge that is stuck above 0 for the whole metricExpiration.
+      # A suspend in the middle of a command leaves a stale value too. The idle suspend caps it (see its
+      # busy signal), so metricExpiration stays long enough for the counters.
+      resource/no_instance:
+        attributes:
+          - key: service.instance.id
+            action: delete
     exporters:
       prometheus:
         endpoint: 0.0.0.0:{{ .Values.metricsPort }}
@@ -38,7 +53,7 @@ data:
       pipelines:
         metrics:
           receivers: [otlp]
-          processors: [memory_limiter, filter/pr_agent]
+          processors: [memory_limiter, filter/pr_agent, transform/actor, resource/no_instance]
           exporters: [prometheus]
         traces:
           receivers: [otlp]

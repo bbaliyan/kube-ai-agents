@@ -131,11 +131,22 @@ long list (more than 100 changed files, notes or discussions) leaves agent.gitla
 may not resolve or reach. The command turns keep_base_url on for every client and then runs gunicorn. The args
 are the rest of the CMD of the gitlab_webhook image, which the command replaces.
 */ -}}
+{{- /*
+With metrics on, the command also runs files/actor_patch.py, which reports each running command as the gauge
+pr_agent.commands_in_flight. An inline patch, like the one above, and not a derived image: no new image to
+build, sign and pin. The resource attribute names the actor, because the name of the template is a hash of
+its contents, which include this env.
+*/ -}}
+{{- $patch := "" -}}
+{{- if $metricsEndpoint }}
+{{- $patch = .Files.Get "files/actor_patch.py" -}}
+{{- $_ := set $env "OTEL_RESOURCE_ATTRIBUTES" (printf "ate.actor=%s/%s" $p.atespace $p.actorName) -}}
+{{- end -}}
 {{- $actor := dict
   "name" $p.actorName
   "atespace" $p.atespace
   "image" $p.image
-  "command" (list "python" "-c" `import functools, runpy, gitlab; gitlab.Gitlab.__init__ = functools.partialmethod(gitlab.Gitlab.__init__, keep_base_url=True); runpy.run_module("gunicorn", run_name="__main__", alter_sys=True)`)
+  "command" (list "python" "-c" (printf "%s\n%s\n%s" `import functools, runpy, gitlab; gitlab.Gitlab.__init__ = functools.partialmethod(gitlab.Gitlab.__init__, keep_base_url=True)` $patch `runpy.run_module("gunicorn", run_name="__main__", alter_sys=True)`))
   "args" (list "-k" "uvicorn_worker.UvicornWorker" "-c" "pr_agent/servers/gunicorn_config.py" "--forwarded-allow-ips" "*" "pr_agent.servers.gitlab_webhook:app")
   "env" $env
   "resources" (dict "cpuMillicores" $p.cpuMillicores "memoryBytes" $p.memoryBytes)

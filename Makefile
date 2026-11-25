@@ -46,6 +46,7 @@ test-charts:
 
 # What the charts hand to each other: the parent, the stack and the agents.
 test-scripts:
+	python3 -m unittest discover -s tests
 	tests/render.sh
 
 lint-pipelines:
