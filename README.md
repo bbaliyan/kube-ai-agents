@@ -128,6 +128,8 @@ The suspend takes about 3 minutes, not 2, because the router counts the last com
 
 Through the `agent` chart you set `agent.idleSuspend.prometheusUrl`, `idleMinutes` and `schedule`, and anything else of the chart in `agent.idleSuspend.helmValues`. The `agent` chart also gives the service account of the CronJob the `editor` role in the atespace of the actor, through the registration. The principal is `user:system:serviceaccount:<release namespace>:<agent>-idle-suspend`. Do not make this account a bootstrap owner.
 
+The defaults differ on purpose. The chart `substrate-idle-suspend` alone suspends after 30 minutes and runs every 5 minutes. The `agent` chart sets `idleMinutes: 10` and a schedule of every minute, because it knows the actor reports `busy`. The default Prometheus address of `substrate-idle-suspend` is only an example. Set `prometheus.url` for your cluster, and set `pr-agent-metrics` `allowScrapeFrom` to the namespace where your Prometheus runs.
+
 If Prometheus needs a bearer token, set `prometheus.bearerTokenSecret.name`. If it uses a private CA, set `prometheus.caSecret.name`.
 
 | Value | Default | Meaning |
