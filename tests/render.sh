@@ -47,7 +47,6 @@ for doc in yaml.safe_load_all(open(sys.argv[1])):
 PY
 }
 app_names() { grep -A3 '^kind: Application' "$1" | grep -E '^  name: ' | sed 's/^  name: //'; }
-wave() { grep -A10 "^  name: $2$" "$1" | grep -o 'sync-wave: "[-0-9]*"'; }
 # The sync wave of one document, by kind and name.
 wave_of() { python3 - "$@" <<'PY'
 import sys, yaml
@@ -115,7 +114,7 @@ is "the install owners are the control plane client and the registration account
 is "the router allow-list holds the webhook shim identity of the agent" "$?"
 grep -q 'credentialProvider: .{"name":"k8s.io"}.' "$stack"
 is "the credential provider is on when an agent exists" "$?"
-{ wave "$stack" substrate-credential-policy; wave "$stack" substrate-install; wave "$stack" substrate-workers; } | tr '\n' ' ' | grep -q 'sync-wave: "0" sync-wave: "1" sync-wave: "2"'
+[ "$(wave_of "$stack" Application substrate-credential-policy) $(wave_of "$stack" Application substrate-install) $(wave_of "$stack" Application substrate-workers)" = '0 1 2' ]
 is "the stack syncs the credential policy, then the install, then the workers" "$?"
 grep -q 'atespace: reviews' "$work/incluster/policy.yaml" && grep -q '  - pr-agent$' "$work/incluster/policy.yaml"
 is "the credential policy allows the namespace of the agent in its atespace" "$?"
@@ -133,7 +132,8 @@ is "with no agent the install has no agent owner, no credential provider and no 
 
 agent="$work/incluster/pr-agent.yaml"
 for suffix in actor registration idle-suspend webhook metrics; do
-  grep -q "^  name: pr-agent-$suffix\$" "$agent" || report "the agent chart renders the Application pr-agent-$suffix" "missing"
+  grep -q "^  name: pr-agent-$suffix\$" "$agent"
+  is "the agent chart renders the Application pr-agent-$suffix" "$?" missing
 done
 [ "$(app_names "$agent" | wc -l)" -eq 5 ] && [ "$(app_names "$agent" | sort -u | wc -l)" -eq 5 ]
 is "the agent chart renders five Applications with unique names" "$?"
@@ -142,7 +142,8 @@ is "every child Application uses the project of the agent" "$?"
 [ "$(grep -c 'resources-finalizer.argocd.argoproj.io' "$agent")" -eq 5 ] && application "$parent" pr-agent | grep -q 'resources-finalizer.argocd.argoproj.io'
 is "every agent Application deletes what it made when it is removed" "$?"
 for suffix in actor registration idle-suspend webhook metrics; do
-  grep -q "releaseName: pr-agent-$suffix\$" "$agent" || report "the Application pr-agent-$suffix sets its release name" "missing"
+  grep -q "releaseName: pr-agent-$suffix\$" "$agent"
+  is "the Application pr-agent-$suffix sets its release name" "$?" missing
 done
 application "$agent" pr-agent-registration | grep -q 'name: pr-agent-registration$'
 is "the registration service account is <agent>-registration" "$?"
@@ -152,8 +153,7 @@ application "$agent" pr-agent-idle-suspend | grep -q 'name: pr-agent-idle-suspen
 is "idle suspend sets its service account and leaves the PodMonitors to the stack" "$?"
 application "$agent" pr-agent-idle-suspend | grep -q 'repoURL: "https://github.com/bbaliyan/kube-ai-agents"' && application "$agent" pr-agent-idle-suspend | grep -q 'path: charts/substrate-idle-suspend$'   && application "$agent" pr-agent-registration | grep -q 'repoURL: "https://github.com/bbaliyan/kube-agent-substrate"'
 is "idle suspend comes from this repository (self) and the registration from Agent Substrate" "$?"
-{ wave "$agent" pr-agent-actor; wave "$agent" pr-agent-webhook; wave "$agent" pr-agent-metrics; } | sort -u | grep -qx 'sync-wave: "0"' \
-  && [ "$(wave "$agent" pr-agent-registration)" = 'sync-wave: "1"' ] && [ "$(wave "$agent" pr-agent-idle-suspend)" = 'sync-wave: "2"' ]
+[ "$(for suffix in actor webhook metrics registration idle-suspend; do wave_of "$agent" Application "pr-agent-$suffix"; done | tr '\n' ' ')" = '0 0 0 1 2 ' ]
 is "within an agent the actor syncs first, then the registration, then idle suspend" "$?"
 application "$agent" pr-agent-webhook | grep -q 'name: pr-agent-webhook$' && application "$agent" pr-agent-webhook | grep -q 'path: charts/pr-agent-webhook'
 is "the webhook shim is named <agent>-webhook" "$?"
