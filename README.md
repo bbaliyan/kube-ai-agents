@@ -132,7 +132,7 @@ If Prometheus needs a bearer token, set `prometheus.bearerTokenSecret.name`. If 
 
 | Value | Default | Meaning |
 |---|---|---|
-| `actors` | `[]` | The `atespace` and `name` of each actor to watch. An empty list fails each run. |
+| `actors` | `[]` | The `atespace` and `name` of each actor to watch. An empty list renders nothing. |
 | `schedule` | `"*/5 * * * *"` | Cron schedule of the CronJob |
 | `idleMinutes` | `30` | Minutes with no activity before a suspend |
 | `idleCpuCores` | `0.05` | CPU cores that still count as idle |

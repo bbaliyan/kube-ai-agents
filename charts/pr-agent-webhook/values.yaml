@@ -58,7 +58,7 @@ ingressRoute:
 # The pipeline route: a CI job asks for a review with a GitLab ID token in place of the webhook secret. The
 # shim checks the token against the keys of GitLab, then checks two claims: namespace_path must be in
 # namespacePaths and pipeline_source must be merge_request_event. It then sends the hop token to the actor,
-# as the webhook route does. See the README, "Reviews from a pipeline".
+# as the webhook route does. See the README, "Webhook and pipeline route".
 pipeline:
   enabled: false
   path: /pipeline

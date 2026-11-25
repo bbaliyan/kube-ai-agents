@@ -29,7 +29,7 @@
 {{- $_ := required "agent.namespace is required" $p.namespace -}}
 {{- $_ := required "agent.atespace is required" $p.atespace -}}
 {{- $_ := required "agent.gitlabUrl is required, the GitLab address that the actor calls, for example http://gitlab.example.test" $p.gitlabUrl -}}
-{{- if not $p.modelEndpoint }}{{ fail "agent.enabled needs agent.modelEndpoint, the base URL of the model server, for example http://model.example.test:11434" }}{{ end -}}
+{{- if not $p.modelEndpoint }}{{ fail "agent.modelEndpoint is required, the base URL of the model server, for example http://model.example.test:11434" }}{{ end -}}
 {{- $model := include "agent.checkedAddress" (dict "address" $p.modelEndpoint "name" "agent.modelEndpoint") | fromJson -}}
 {{- $provider := include "agent.providerSettings" $p.model | fromJson -}}
 {{- range $p.fallbackModels | default list }}

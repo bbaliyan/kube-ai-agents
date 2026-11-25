@@ -5,7 +5,7 @@ templates:
   - templates/rbac.yaml
   - templates/podmonitor.yaml
 values:
-  - ../ci/aws-values.yaml
+  - ../../../tests/values/substrate-idle-suspend/bearer-token.yaml
 tests:
   - it: renders no PodMonitor by default
     template: templates/podmonitor.yaml
@@ -144,7 +144,7 @@ tests:
   - it: lists the actors and the idle settings in the ConfigMap
     template: templates/configmap.yaml
     values:
-      - ../ci/onprem-values.yaml
+      - ../../../tests/values/substrate-idle-suspend/two-actors-sync.yaml
     asserts:
       - equal:
           path: data.actors
