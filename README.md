@@ -88,6 +88,20 @@ Warnings:
 
 The chart needs a Prometheus that scrapes `atenet-router`, `atenet-egress`, `ate-api-server` and `atelet`. With the Prometheus Operator, the PodMonitors come from `substrate-stack` (see PodMonitors). The PodMonitors are in the control plane namespace, so the `podMonitorNamespaceSelector` of the Prometheus must include it. Upstream makes a scrape object only on GKE.
 
+### How long to wait
+
+A pr-agent actor reports the commands it runs (see "Reporting a running command"), and the chart reads that as the signal `busy`. While a command runs, the actor is never suspended, so `idleMinutes` does not have to outlast a review. It only has to outlast what follows the last command: the router events that the comments of the agent cause, which arrive within seconds. `idleMinutes: 2` is enough.
+
+Measured with one agent and a local 30 billion parameter model:
+
+| Merge request | Time the actor was busy | Suspended after the last command |
+|---|---|---|
+| Small (one file) | about 1 minute | about 12 minutes with `idleMinutes: 10` and no `busy` signal |
+| Large, cut into chunks (4 files, 330,000 characters), first run | 12.4 minutes | not measured |
+| The same, second run, `idleMinutes: 2` | 15.8 minutes, not suspended in the middle | about 3 to 4 minutes |
+
+The suspend takes about 3 minutes, not 2, because the router counts the last comment events of the agent for a short time after the last command. Your model and merge requests will differ. The busy time is the time that the actor stays awake, so measure it with the gauge `pr_agent_commands_in_flight` before you lower `idleMinutes`.
+
 Through the `agent` chart you set `agent.idleSuspend.prometheusUrl`, `idleMinutes` and `schedule`, and anything else of the chart in `agent.idleSuspend.helmValues`. The `agent` chart also gives the service account of the CronJob the `editor` role in the atespace of the actor, through the registration. The principal is `user:system:serviceaccount:<release namespace>:<agent>-idle-suspend`. Do not make this account a bootstrap owner.
 
 If Prometheus needs a bearer token, set `prometheus.bearerTokenSecret.name`. If it uses a private CA, set `prometheus.caSecret.name`.
