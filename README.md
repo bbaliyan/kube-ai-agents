@@ -70,7 +70,7 @@ Each agent can bring a simple Grafana dashboard, `Agent: <name>`. It shows four 
 - Reviews in the last 24 hours.
 - Model calls per review. A review that is cut into chunks shows a higher number.
 - Tokens used in the last 24 hours.
-- Work done per hour: reviews, descriptions and improvement suggestions.
+- Work done: reviews, descriptions and improvement suggestions that finished, in bars. A bar covers the slice of time that ends at its right edge, on the same time scale as the busy time beside it.
 - Busy time: when the agent runs a command.
 - Tokens read by the model, and tokens written by the model, in the last 24 hours. Two plain numbers: a review reads far more than it writes.
 
