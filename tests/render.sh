@@ -375,6 +375,13 @@ agent_fails "a model key Secret with no name fails" 'agent.modelApiKeySecret nee
 agent_fails "a review call cap that is not a number fails" 'agent.maxReviewCalls' --set agent.maxReviewCalls=abc
 grep -q 'CONFIG__FALLBACK_MODELS: .\["ollama/small:8b","ollama/tiny:3b"\]' <<<"$(agent_chart --set 'agent.fallbackModels={ollama/small:8b,ollama/tiny:3b}' --show-only templates/actor.yaml)" && grep -q 'CONFIG__FALLBACK_MODELS: .\[\]' <<<"$(agent_chart --show-only templates/actor.yaml)"
 is "agent.fallbackModels sets the fallback list, empty by default" "$?"
+out="$(agent_chart --set 'agent.fallbackModels={ollama/small:8b}' --show-only templates/actor.yaml)"; plain="$(agent_chart --show-only templates/actor.yaml)"
+grep -q 'CONFIG__RETRY_SAME_MODEL_ON_TIMEOUT: "false"' <<<"$out" && grep -q 'CONFIG__NUM_RETRIES: "1"' <<<"$out" && ! grep -q 'RETRY_SAME_MODEL_ON_TIMEOUT' <<<"$plain" && grep -q 'CONFIG__AI_TIMEOUT: "300"' <<<"$plain"
+is "with fallbackModels the actor fails over at once, and the timeout defaults to 300 seconds" "$?"
+out="$(agent_chart --set 'agent.fallbackModels={ollama/small:8b}' --set agent.retrySameModelOnTimeout=true --set agent.modelRetries=3 --show-only templates/actor.yaml)"; plain="$(agent_chart --set agent.modelRetries=0 --show-only templates/actor.yaml)"
+grep -q 'CONFIG__RETRY_SAME_MODEL_ON_TIMEOUT: "true"' <<<"$out" && grep -q 'CONFIG__NUM_RETRIES: "3"' <<<"$out" && grep -q 'CONFIG__NUM_RETRIES: "0"' <<<"$plain"
+is "agent.retrySameModelOnTimeout and agent.modelRetries override the failover defaults" "$?"
+agent_fails "a model retry count above 10 fails" 'agent.modelRetries must be' --set agent.modelRetries=11
 agent_fails "a fallback model with another prefix fails" 'agent.fallbackModels must use the same prefix' --set 'agent.fallbackModels={openai/other}'
 agent_fails "a model timeout that is not a number fails" 'agent.modelTimeoutSeconds' --set agent.modelTimeoutSeconds=abc
 agent_fails "idle suspend with no Prometheus address fails" 'agent.idleSuspend.prometheusUrl is required' --set agent.idleSuspend.enabled=true

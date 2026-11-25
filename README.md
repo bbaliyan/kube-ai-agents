@@ -56,7 +56,7 @@ Remove its entry from `agents`. Argo CD prunes the Applications of the agent (wa
 
 ## Fallback models
 
-Set `fallbackModels` on an agent to a list of model names. If a call to `model` fails or runs past `modelTimeoutSeconds`, pr-agent tries the next one in the list. The models share one model server, so each must start with the same prefix as `model`. A fallback model on another server is not supported.
+Set `fallbackModels` on an agent to a list of model names. If a call to `model` fails or runs past `modelTimeoutSeconds`, pr-agent tries the next one in the list. The models share one model server, so each must start with the same prefix as `model`. A fallback model on another server is not supported. With `fallbackModels` set, the actor does not retry the failed model: a call that runs past `modelTimeoutSeconds` (default 300) goes to the next model at once, and a refused connection is retried once. Without `fallbackModels`, pr-agent retries the same model. Each agent can override this with `retrySameModelOnTimeout` (true or false), `modelRetries` (0 to 10) and `modelTimeoutSeconds`.
 
 ```yaml
 model: ollama/qwen3-coder:30b
