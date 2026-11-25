@@ -49,6 +49,9 @@ spec:
   destinations:
     - server: https://kubernetes.default.svc
       namespace: {{ .namespace }}
+    # The registration and idle suspend charts put a Role and a RoleBinding here, so the Job and the CronJob can reach the control plane.
+    - server: https://kubernetes.default.svc
+      namespace: {{ $.Values.substrate.namespace }}
   clusterResourceWhitelist:
     {{- range $.Values.clusterResources }}
     - group: {{ .group | quote }}

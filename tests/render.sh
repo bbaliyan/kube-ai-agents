@@ -95,11 +95,11 @@ import sys, yaml
 p = {d["metadata"]["name"]: d["spec"] for d in yaml.safe_load_all(open(sys.argv[1])) if d and d["kind"] == "AppProject"}
 assert sorted(p) == ["ai-agent", "pr-agent"], sorted(p)
 assert [x["namespace"] for x in p["ai-agent"]["destinations"]] == ["argocd", "ate-system"], p["ai-agent"]["destinations"]
-assert [x["namespace"] for x in p["pr-agent"]["destinations"]] == ["pr-agent"], p["pr-agent"]["destinations"]
+assert [x["namespace"] for x in p["pr-agent"]["destinations"]] == ["pr-agent", "ate-system"], p["pr-agent"]["destinations"]
 for k in ("sourceRepos", "clusterResourceWhitelist", "namespaceResourceWhitelist"):
     assert p["pr-agent"][k] == p["ai-agent"][k], k
 PY
-is "the shared project has no agent namespace, and each agent has its own project with its namespace only and the same rules" "$?"
+is "the shared project has no agent namespace, and each agent has its own project with its namespace and the control plane namespace, and the same rules" "$?"
 grep -A12 '^  clusterResourceWhitelist:' "$parent" | grep -q 'kind: CustomResourceDefinition' && grep -A12 '^  clusterResourceWhitelist:' "$parent" | grep -q 'kind: Namespace'
 is "the project allows the cluster-scoped kinds that the children make" "$?"
 [ "$(wave_of "$parent" Application substrate)" = 0 ] && [ "$(wave_of "$parent" Application pr-agent)" = 1 ] && [ "$(wave_of "$parent" AppProject ai-agent)" = -1 ]

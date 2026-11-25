@@ -15,7 +15,7 @@ You point one Argo CD Application at the chart `ai-agent` and list your agents i
 | `charts/pr-agent-webhook` | The GitLab webhook shim, an Envoy proxy. |
 | `charts/pr-agent-metrics` | An OpenTelemetry collector for the metrics of pr-agent. |
 
-The Applications `substrate` and one for each agent use the shared project `ai-agent`. It allows this repository, the Agent Substrate repository, and the namespaces `argocd` and of the control plane. Each agent also has its own project, named after the agent. The project allows the same repositories and kinds, and only the namespace of the agent. Every child Application of the agent uses that project. The parent passes its name to the `agent` chart in the value `project`.
+The Applications `substrate` and one for each agent use the shared project `ai-agent`. It allows this repository, the Agent Substrate repository, and the namespaces `argocd` and of the control plane. Each agent also has its own project, named after the agent. The project allows the same repositories and kinds, and the namespace of the agent and of the control plane. Every child Application of the agent uses that project. The parent passes its name to the `agent` chart in the value `project`.
 
 ## How it fits together
 
