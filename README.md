@@ -94,6 +94,8 @@ Below them are three sections:
 - Models and failures: a timeline with one row for each model, which shows when each one answered (a fallback model has its own orange row), and the failed commands over time. An empty chart means no failures.
 - Details: a table of the models that answered, with their role (main or fallback) and their commands, and the tokens read and written by the model.
 
+A counter that starts at 1 has no earlier value, so a plain `increase()` loses the first command of every new series (a new model, or a restarted worker). The panels add the first value of each series that is new in the window.
+
 The model and the outcome come from the actor patch (see "Reporting a running command"). pr-agent keeps both in its run details and does not report them as metrics. The patch adds the counters `pr_agent_commands_finished_total` (label `outcome`) and `pr_agent_commands_by_model_total` (labels `model` and `fallback`).
 
 To turn it on, set `agent.dashboard.enabled: true`. It needs `agent.metricsCollector.enabled: true`. The chart `pr-agent-metrics` makes a ConfigMap with the label `grafana_dashboard: "1"`, and the Grafana sidecar loads it.
