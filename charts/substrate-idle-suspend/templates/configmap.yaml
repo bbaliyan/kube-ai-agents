@@ -1,0 +1,49 @@
+{{- if .Values.actors }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "substrate-idle-suspend.fullname" . }}-{{ include "substrate-idle-suspend.hash" . }}
+  labels:
+    {{- include "substrate-idle-suspend.labels" . | nindent 4 }}
+immutable: true
+data:
+  idle-suspend.sh: |
+    {{- .Files.Get "files/idle-suspend.sh" | nindent 4 }}
+  actors: |
+    {{- include "substrate-idle-suspend.actors" . | trim | nindent 4 }}
+  config.env: |
+    IDLE_MINUTES={{ .Values.idleMinutes }}
+    IDLE_CPU_CORES={{ .Values.idleCpuCores }}
+    SUSPEND_MODE={{ .Values.suspendMode }}
+    PROMETHEUS_URL={{ include "substrate-idle-suspend.prometheusUrl" . }}
+    QUERY_TIMEOUT={{ .Values.prometheus.timeoutSeconds }}
+    BUSY_ENABLED={{ .Values.busy.enabled }}
+    BUSY_MAX_MINUTES={{ .Values.busy.maxMinutes }}
+  query.health.envoy: |
+    {{- .Values.queries.health.envoy | nindent 4 }}
+  query.health.egress: |
+    {{- .Values.queries.health.egress | nindent 4 }}
+  query.health.router: |
+    {{- .Values.queries.health.router | nindent 4 }}
+  query.health.ateapi: |
+    {{- .Values.queries.health.ateapi | nindent 4 }}
+  query.health.atelet: |
+    {{- .Values.queries.health.atelet | nindent 4 }}
+  query.routed: |
+    {{- .Values.queries.routed | nindent 4 }}
+  query.resumed: |
+    {{- .Values.queries.resumed | nindent 4 }}
+  query.inflight: |
+    {{- .Values.queries.inflight | nindent 4 }}
+  query.egress: |
+    {{- .Values.queries.egress | nindent 4 }}
+  {{- if .Values.busy.enabled }}
+  {{- $gauge := printf "(sum(%s{%s=\"@ACTOR@\"}) or vector(0))" .Values.busy.metric .Values.busy.actorLabel }}
+  query.busy: |
+    max_over_time({{ $gauge }}[@WINDOW@:15s])
+  query.busy.cap: |
+    min_over_time({{ $gauge }}[@CAP@:15s])
+  {{- end }}
+  query.cpu: |
+    {{- .Values.queries.cpu | nindent 4 }}
+{{- end }}

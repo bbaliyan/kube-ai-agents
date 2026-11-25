@@ -13,8 +13,8 @@ metadata:
 spec:
   project: {{ required "project is required: the parent chart passes the project of the agent" $.Values.project }}
   source:
-    repoURL: {{ .Values.substrate.repoURL | quote }}
-    targetRevision: {{ .Values.substrate.revision | quote }}
+    repoURL: {{ .Values.self.repoURL | quote }}
+    targetRevision: {{ .Values.self.revision | quote }}
     path: charts/substrate-idle-suspend
     helm:
       releaseName: {{ $a.name }}-idle-suspend

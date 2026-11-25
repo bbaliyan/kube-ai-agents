@@ -30,7 +30,7 @@ lint-yaml:
 # The chart agent needs the values that ai-agent gives it, and ai-agent is rendered with each example.
 charts: export KUBECONFORM_IGNORE_MISSING_SCHEMAS = 1
 charts:
-	for chart in substrate-stack substrate-credential-policy pr-agent-webhook pr-agent-metrics; do \
+	for chart in substrate-stack substrate-credential-policy substrate-idle-suspend pr-agent-webhook pr-agent-metrics; do \
 		$(CHECKS)/helm-kubeconform.sh charts/$$chart; \
 	done
 	helm lint charts/agent --values charts/agent/ci/values.yaml
@@ -42,11 +42,13 @@ charts:
 
 # What the charts render, as declared tests (helm-unittest).
 test-charts:
-	helm unittest charts/pr-agent-webhook charts/substrate-credential-policy
+	helm unittest charts/pr-agent-webhook charts/substrate-credential-policy charts/substrate-idle-suspend
 
-# What the charts hand to each other: the parent, the stack and the agents.
+# What the charts hand to each other: the parent, the stack and the agents. The idle suspend script runs
+# against stubs of kubectl-ate and curl (bash and jq are in the kube-devenv image).
 test-scripts:
 	python3 -m unittest discover -s tests
+	bash charts/substrate-idle-suspend/tests/idle_suspend_test.sh
 	tests/render.sh
 
 lint-pipelines:

@@ -1,0 +1,13 @@
+# Idle-suspend values. Use the same atespace and name as in the substrate-actor release.
+image:
+  digest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+actors:
+  - atespace: reviews
+    name: pr-review
+  - atespace: reviews
+    name: triage
+schedule: "*/10 * * * *"
+idleMinutes: 15
+suspendMode: sync
+prometheus:
+  url: http://prometheus.monitoring.svc:9090

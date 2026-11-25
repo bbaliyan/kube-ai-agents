@@ -150,6 +150,8 @@ application "$agent" pr-agent-registration | grep -q 'user:system:serviceaccount
 is "the registration grants the idle suspend account the editor role" "$?"
 application "$agent" pr-agent-idle-suspend | grep -q 'name: pr-agent-idle-suspend$' && ! application "$agent" pr-agent-idle-suspend | grep -q 'podMonitors:'
 is "idle suspend sets its service account and leaves the PodMonitors to the stack" "$?"
+application "$agent" pr-agent-idle-suspend | grep -q 'repoURL: "https://github.com/bbaliyan/kube-ai-agents"' && application "$agent" pr-agent-idle-suspend | grep -q 'path: charts/substrate-idle-suspend$'   && application "$agent" pr-agent-registration | grep -q 'repoURL: "https://github.com/bbaliyan/kube-agent-substrate"'
+is "idle suspend comes from this repository (self) and the registration from Agent Substrate" "$?"
 { wave "$agent" pr-agent-actor; wave "$agent" pr-agent-webhook; wave "$agent" pr-agent-metrics; } | sort -u | grep -qx 'sync-wave: "0"' \
   && [ "$(wave "$agent" pr-agent-registration)" = 'sync-wave: "1"' ] && [ "$(wave "$agent" pr-agent-idle-suspend)" = 'sync-wave: "2"' ]
 is "within an agent the actor syncs first, then the registration, then idle suspend" "$?"
@@ -190,6 +192,8 @@ is "two agents with idle suspend render" "$?"
 [ "$(app_names "$work/two/stack.yaml" | grep -cx 'substrate-monitors')" -eq 1 ] && application "$work/two/stack.yaml" substrate-monitors | grep -q 'enabled: true' \
   && application "$work/two/stack.yaml" substrate-monitors | grep -q 'release: prometheus' && ! grep -q 'podMonitors:' "$work/two/first.yaml" "$work/two/second.yaml"
 is "the stack makes one monitors Application for any number of agents with idle suspend" "$?"
+application "$work/two/stack.yaml" substrate-monitors | grep -q 'repoURL: "https://github.com/bbaliyan/kube-ai-agents"' && application "$work/two/stack.yaml" substrate-monitors | grep -q 'path: charts/substrate-idle-suspend$'
+is "the monitors Application comes from this repository (self)" "$?"
 ! app_names "$work/external/stack.yaml" | grep -qx 'substrate-monitors'
 is "the stack makes no monitors Application when no agent has idle suspend" "$?"
 

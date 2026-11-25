@@ -1,0 +1,35 @@
+{{- /* The idle signals come from the control plane, which upstream scrapes only on GKE. These PodMonitors are for a Prometheus Operator that selects them by label. Each pod has the label app, and the queries use it. */ -}}
+{{- if .Values.podMonitors.enabled }}
+{{- $root := . -}}
+{{- $components := list
+  (dict "app" "atenet-router" "endpoints" (list (dict "port" "metrics") (dict "port" "envoy-metrics" "path" "/stats/prometheus")))
+  (dict "app" "atenet-egress" "endpoints" (list (dict "port" "metrics") (dict "port" "envoy-metrics" "path" "/stats/prometheus")))
+  (dict "app" "ate-api-server" "endpoints" (list (dict "port" "prometheus")))
+  (dict "app" "atelet" "endpoints" (list (dict "port" "prometheus"))) -}}
+{{- range $component := $components }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ printf "%s-%s" (include "substrate-idle-suspend.fullname" $root) $component.app | trunc 63 | trimSuffix "-" }}
+  namespace: {{ $root.Values.substrate.namespace }}
+  labels:
+    {{- include "substrate-idle-suspend.labels" $root | nindent 4 }}
+    {{- with $root.Values.podMonitors.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ $component.app }}
+  podTargetLabels: [app]
+  podMetricsEndpoints:
+    {{- range $endpoint := $component.endpoints }}
+    - port: {{ $endpoint.port }}
+      {{- with $endpoint.path }}
+      path: {{ . }}
+      {{- end }}
+      interval: {{ $root.Values.podMonitors.interval }}
+    {{- end }}
+---
+{{- end }}
+{{- end }}

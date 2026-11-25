@@ -1,0 +1,127 @@
+# The actors to watch. Use the same atespace and name as in the substrate-actor chart.
+# With no actors the chart renders only the PodMonitors (if podMonitors.enabled), so one release can own the scrape objects
+# of the control plane for all agents.
+actors: []
+#  - atespace: reviews
+#    name: pr-review
+
+# Cron schedule of the check.
+schedule: "*/5 * * * *"
+
+# An actor must show no activity for this many minutes before it is suspended.
+idleMinutes: 30
+
+# The actor is idle when it used fewer CPU cores than this over the idle time.
+idleCpuCores: 0.05
+
+# How the snapshot becomes durable: async (the upstream default) or sync.
+suspendMode: async
+
+# Prometheus is the source of the idle signals.
+prometheus:
+  # Base URL of Prometheus. The default is the service of the Prometheus Operator. Set your own.
+  url: http://prometheus-operated.monitoring.svc:9090
+  # A Secret in the release namespace that holds a bearer token. Leave the name empty for no authentication.
+  bearerTokenSecret:
+    name: ""
+    key: token
+  # A Secret in the release namespace that holds the CA certificate of the server. Leave the name empty to use the CA bundle of the image.
+  caSecret:
+    name: ""
+    key: ca.crt
+  # Seconds that one query may take.
+  timeoutSeconds: 20
+
+# The queries that read the idle signals. Each query must return exactly one sample.
+# A query that returns no sample or many samples is an error, and nothing is suspended.
+# The script replaces @ATESPACE@ and @TEMPLATE@ with the atespace and the template of the actor,
+# and @WINDOW@ with the idle time. The metric names are the upstream OpenTelemetry names after the
+# Prometheus conversion: dots become underscores, and a unit and `_total` are added.
+queries:
+  # One existence query for each source of a signal. Each must return a number above 0. The signal
+  # queries below read 0 for a series that does not exist, so without these queries a source that
+  # is renamed or not scraped would look like silence. Any source that fails stops the run.
+  # The router envoy feeds `inflight`, the egress envoy feeds `egress`, router feeds `routed`, ateapi feeds `resumed` and
+  # atelet feeds `cpu`. The envoy query
+  # names the router: the egress proxy has an envoy too, and it must not hide a router envoy that is not scraped.
+  # The router, ateapi and atelet queries use a metric that the component always exports, and the
+  # `app` label of its pod. Change them if your scrape sets other labels.
+  health:
+    envoy: 'count(envoy_server_live{app="atenet-router"} == 1)'
+    egress: 'count(envoy_server_live{app="atenet-egress"} == 1)'
+    router: 'count(go_memstats_alloc_bytes{app="atenet-router"})'
+    ateapi: 'count(go_memstats_alloc_bytes{app="ate-api-server"})'
+    atelet: 'count(go_memstats_alloc_bytes{app="atelet"})'
+  # 1 when the router or the egress proxy counted a route for the template in the idle time.
+  # It compares the sum now with the sum one idle time ago. It does not use increase():
+  # a counter that starts at 1 has no earlier sample, so increase() reads 0 for the first request.
+  routed: '(sum(atenet_router_route_duration_seconds_count{ate_template_atespace="@ATESPACE@",ate_template_name="@TEMPLATE@"}) or vector(0)) != bool (sum(atenet_router_route_duration_seconds_count{ate_template_atespace="@ATESPACE@",ate_template_name="@TEMPLATE@"} offset @WINDOW@) or vector(0))'
+  # 1 when ateapi resumed an actor of the template in the idle time. The actor was then not idle for the full time.
+  resumed: '(sum(ate_actor_lifecycle_operation_duration_seconds_count{ate_actor_operation_name="resume",ate_template_atespace="@ATESPACE@",ate_template_name="@TEMPLATE@"}) or vector(0)) != bool (sum(ate_actor_lifecycle_operation_duration_seconds_count{ate_actor_operation_name="resume",ate_template_atespace="@ATESPACE@",ate_template_name="@TEMPLATE@"} offset @WINDOW@) or vector(0))'
+  # Above 0 when a request was in flight through the actor clusters of the router at any time in the idle time.
+  # Envoy has no series for one actor, so this covers all actors.
+  inflight: 'max_over_time((sum(envoy_cluster_upstream_rq_active{envoy_cluster_name=~"actor_.*"}) or vector(0))[@WINDOW@:15s])'
+  # Above 0 when a request to an outside host was in flight in the egress proxy at any time in the idle time. An actor that
+  # waits for a model or a GitLab answer is quiet on every other signal, and a suspend closes its outbound connections, so
+  # this signal keeps it. It counts the requests that the proxy sees inside its tunnels (the listeners that terminate TLS or
+  # forward plain HTTP), one per call. It does not count the tunnel itself: a client that keeps an idle connection open holds a
+  # tunnel for as long as it likes, and that is not work. It does not compare request counts either: an actor sends its own
+  # telemetry every minute, and that would keep it awake for ever. A call that is shorter than a scrape can be missed, and the
+  # router signals cover the window after the request that started the work. Egress has no series for one actor, so this
+  # covers all actors.
+  egress: 'max_over_time((sum(envoy_http_downstream_rq_active{app="atenet-egress",envoy_http_conn_manager_prefix=~"mitm_.*"}) or vector(0))[@WINDOW@:15s])'
+  # CPU cores that the actors of the template used in the idle time. Compared with idleCpuCores.
+  cpu: 'sum(rate(ate_actor_stats_cpu_time_seconds_total{ate_template_atespace="@ATESPACE@",ate_template_name="@TEMPLATE@"}[@WINDOW@]))'
+
+# An optional signal from an agent that reports commands in flight: a gauge that is 1 while a command runs and 0
+# otherwise, with a label that holds "<atespace>/<actor>". The signal is busy when the gauge was above 0
+# at any time in the idle time. With `enabled: false` the signal is not queried, and agents without the gauge keep the
+# other signals. A crash or a suspend in the middle of a command can leave the gauge at 1. If the gauge was above 0
+# for the whole of the last `maxMinutes`, the signal is ignored and the run logs it.
+busy:
+  enabled: false
+  metric: pr_agent_commands_in_flight
+  actorLabel: ate_actor
+  maxMinutes: 30
+
+substrate:
+  # The namespace of ate-api-server. Must be ate-system: upstream installs there only.
+  namespace: ate-system
+
+# The registration image: kubectl-ate, jq, curl and bash. It is built in the repository kube-agent-substrate
+# (images/substrate-registration), and the chart pulls it by digest.
+image:
+  repository: ghcr.io/bbaliyan/kube-agent-substrate/substrate-registration
+  # The all-zero digest never pulls. Set the digest of the published image.
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+# A run that takes longer than this many seconds is stopped.
+activeDeadlineSeconds: 300
+# A run that missed its start by more than this many seconds is skipped.
+startingDeadlineSeconds: 120
+successfulJobsHistoryLimit: 1
+failedJobsHistoryLimit: 3
+# Set to true to stop the schedule without removing the chart.
+suspend: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+nodeSelector: {}
+tolerations: []
+
+# PodMonitors of the Prometheus Operator for the components that feed the signals: the router, the egress proxy, the
+# API server and the atelet. Upstream makes a scrape object only on GKE (PodMonitoring), so a cluster with the
+# Prometheus Operator turns this on. `labels` must match the podMonitorSelector of the Prometheus.
+podMonitors:
+  enabled: false
+  labels: {}
+  # Keep it well below idleMinutes: a request younger than one scrape is not in the data yet.
+  interval: 30s
+
+serviceAccount:
+  name: ""

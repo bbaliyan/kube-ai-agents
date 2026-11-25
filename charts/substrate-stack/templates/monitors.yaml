@@ -11,8 +11,8 @@ metadata:
 spec:
   project: ai-agents-stack
   source:
-    repoURL: {{ .Values.substrate.repoURL | quote }}
-    targetRevision: {{ .Values.substrate.revision | quote }}
+    repoURL: {{ .Values.self.repoURL | quote }}
+    targetRevision: {{ .Values.self.revision | quote }}
     path: charts/substrate-idle-suspend
     helm:
       releaseName: substrate-monitors
