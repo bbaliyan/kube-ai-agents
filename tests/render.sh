@@ -355,6 +355,7 @@ assert cm["metadata"]["labels"]["grafana_dashboard"] == "1"
 assert d["uid"] == "ai-agent-reviewer" and d["title"] == "Agent: reviewer" and len(d["panels"]) == 16
 exprs = [t["expr"] for p in d["panels"] for t in p.get("targets", [])]
 assert not any("[24h]" in e for e in exprs), "a panel has a fixed 24 hour window, and must follow the time range"
+assert all(e.count("increase(") == 2 * e.count("min_over_time(") for e in exprs), "a panel counts with a bare increase(), which loses the first value of a new series"
 assert d["time"]["from"] == "now-24h" and "ai-agent" in d["tags"] and d["graphTooltip"] == 1
 assert all("ate_actor=\"ate/rev\"" in e for e in exprs), exprs
 '
