@@ -161,7 +161,8 @@ its contents, which include this env.
 */ -}}
 {{- $patch := "" -}}
 {{- if $metricsEndpoint }}
-{{- $patch = .Files.Get "files/actor_patch.py" -}}
+{{- /* Agent Substrate refuses an inline command of more than 4096 characters, so the comment lines of the file stay out of it. */ -}}
+{{- $patch = regexReplaceAll `(?m)^[ \t]*#[^\n]*\n` (.Files.Get "files/actor_patch.py") "" -}}
 {{- $_ := set $env "OTEL_RESOURCE_ATTRIBUTES" (printf "ate.actor=%s/%s" $p.atespace $p.actorName) -}}
 {{- end -}}
 {{- $actor := dict

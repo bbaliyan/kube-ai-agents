@@ -307,6 +307,16 @@ grep -q 'CONFIG__OUTPUT_RUN_DETAILS' <<<"$(agent_chart --show-only templates/act
 is "agent.runDetails false leaves the run details setting out" "$?"
 ! grep -q 'OTEL__IS_ENABLED' <<<"$(agent_chart --show-only templates/actor.yaml)"
 is "metrics are off when no endpoint is set" "$?"
+python3 - "$(agent_chart --set agent.metricsCollector.enabled=true --show-only templates/actor.yaml)" <<'PY'
+import sys, yaml
+app = yaml.safe_load(sys.argv[1])
+command = app["spec"]["source"]["helm"]["valuesObject"]["actors"][0]["command"]
+longest = max(len(part) for part in command)
+# Agent Substrate refuses an inline command of more than 4096 characters; keep 5 percent in hand.
+assert longest <= 3900, f"the inline command is {longest} characters, and the limit of Agent Substrate is 4096"
+assert "#" not in "".join(line.lstrip()[:1] for line in command[2].splitlines()), "a comment line is left in the inline command"
+PY
+is "the inline command of the actor with metrics is under the 4096 character limit of Agent Substrate, with no comment lines" "$?"
 out="$(agent_chart --set agent.metricsCollector.enabled=true --show-only templates/actor.yaml)"
 grep -q 'OTEL__OTLP_ENDPOINT: http://pr-agent-metrics.a.svc.cluster.local:4318' <<<"$out" && grep -q 'ate-secret://k8s.io/default/a/pr-agent-metrics/password' <<<"$out" && ! grep -q 'GUNICORN_WORKERS' <<<"$out"
 is "the metrics collector is the OTLP endpoint of the actor, with the generated token sent by the egress proxy" "$?" "$out"
