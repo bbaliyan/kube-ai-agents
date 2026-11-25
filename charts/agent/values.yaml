@@ -74,6 +74,12 @@ agent:
   # model at once and a failed connection is retried once, so a dead main model costs about this long. Without
   # fallbackModels, pr-agent retries the same model, so a hung call costs twice this long.
   modelTimeoutSeconds: 300
+  # Optional overrides of how pr-agent retries a failed model call, for each agent. Leave them unset (null) for the
+  # defaults above: with fallbackModels, retrySameModelOnTimeout is false and modelRetries is 1; without, pr-agent
+  # keeps its own defaults (true and 4). retrySameModelOnTimeout: replay a timed-out call on the same model.
+  # modelRetries: tries again after a refused connection or a 429 or 5xx answer, 0 to 10.
+  retrySameModelOnTimeout: null
+  modelRetries: null
   # The GitLab address that the actor uses. The egress policy allows its host and sets the token there.
   gitlabUrl: ""
   # More GitLab addresses that the actor may call, with the same token. An https address needs egressTrustBundle.
