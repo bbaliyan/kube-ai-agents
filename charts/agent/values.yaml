@@ -1,6 +1,9 @@
 # The chart ai-agent renders one release of this chart for each agent and fills these values.
 # Render it by hand only for a test.
 
+# The Argo CD project of the agent. Its Applications use it.
+project: ""
+
 self:
   repoURL: https://github.com/bbaliyan/kube-ai-agents
   revision: main

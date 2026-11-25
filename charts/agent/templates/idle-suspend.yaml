@@ -11,7 +11,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "2"
 spec:
-  project: ai-agent
+  project: {{ required "project is required: the parent chart passes the project of the agent" $.Values.project }}
   source:
     repoURL: {{ .Values.substrate.repoURL | quote }}
     targetRevision: {{ .Values.substrate.revision | quote }}

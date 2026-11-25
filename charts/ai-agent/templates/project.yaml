@@ -1,4 +1,3 @@
-{{- $agents := include "ai-agent.agents" . | fromJsonArray }}
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -8,7 +7,7 @@ metadata:
     # Before every Application that uses it.
     argocd.argoproj.io/sync-wave: "-1"
 spec:
-  description: AI agents on Agent Substrate
+  description: The parent Applications of the agents and the control plane. Each agent has its own project.
   sourceRepos:
     - {{ .Values.self.repoURL | quote }}
     {{- if ne .Values.self.repoURL .Values.substrate.repoURL }}
@@ -16,7 +15,6 @@ spec:
     {{- end }}
   destinations:
     {{- $namespaces := list "argocd" .Values.substrate.namespace }}
-    {{- range $agents }}{{ $namespaces = append $namespaces .namespace }}{{ end }}
     {{- range $namespaces | uniq }}
     - server: https://kubernetes.default.svc
       namespace: {{ . }}
@@ -29,3 +27,34 @@ spec:
   namespaceResourceWhitelist:
     - group: "*"
       kind: "*"
+{{- range include "ai-agent.agents" . | fromJsonArray }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ .name }}
+  namespace: argocd
+  annotations:
+    # Below the wave of the Application of the agent (1). On sync the project exists before its
+    # Applications. On removal Argo CD prunes the higher wave first, so the Applications and their
+    # finalizers and hooks still find the namespace permitted. One shared project lost it too early.
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: The agent {{ .name }}
+  sourceRepos:
+    - {{ $.Values.self.repoURL | quote }}
+    {{- if ne $.Values.self.repoURL $.Values.substrate.repoURL }}
+    - {{ $.Values.substrate.repoURL | quote }}
+    {{- end }}
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: {{ .namespace }}
+  clusterResourceWhitelist:
+    {{- range $.Values.clusterResources }}
+    - group: {{ .group | quote }}
+      kind: {{ .kind }}
+    {{- end }}
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+{{- end }}

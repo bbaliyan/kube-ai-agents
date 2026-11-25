@@ -48,8 +48,16 @@ PY
 }
 app_names() { grep -A3 '^kind: Application' "$1" | grep -E '^  name: ' | sed 's/^  name: //'; }
 wave() { grep -A10 "^  name: $2$" "$1" | grep -o 'sync-wave: "[-0-9]*"'; }
+# The sync wave of one document, by kind and name.
+wave_of() { python3 - "$@" <<'PY'
+import sys, yaml
+for d in yaml.safe_load_all(open(sys.argv[1])):
+    if d and d["kind"] == sys.argv[2] and d["metadata"]["name"] == sys.argv[3]:
+        print(d["metadata"]["annotations"]["argocd.argoproj.io/sync-wave"])
+PY
+}
 # The lines of one Application, from its name to the next document.
-application() { awk -v name="$2" '$0 == "  name: " name {on = 1} on && /^---/ {exit} on' "$1"; }
+application() { awk -v name="$2" '/^kind:/ {kind = $2} $0 == "  name: " name && kind == "Application" {on = 1} on && /^---/ {exit} on' "$1"; }
 
 ai_agent() { helm template p "$repo/charts/ai-agent" "$@"; }
 # The chain for one fixture: the parent, the substrate stack, the credential policy and each agent.
@@ -79,15 +87,25 @@ is "the parent renders the project ai-agent" "$?"
 grep -q 'github.com/bbaliyan/kube-ai-agents' "$parent" && grep -q 'github.com/bbaliyan/kube-agent-substrate' "$parent"
 is "the project allows this repository and the Substrate repository" "$?"
 [ "$(grep -c '^kind: Application' "$parent")" -eq 2 ] && [ "$(grep -c '^  project: ai-agent$' "$parent")" -eq 2 ]
-is "the parent renders the substrate Application and one Application for the one agent, both in the project" "$?"
+is "the parent renders the substrate Application and one Application for the one agent, both in the shared project" "$?"
 ! grep -q '^  project: default$' "$work"/incluster/*.yaml
 is "no Application of the chain uses the default project" "$?"
-grep -A12 '^  destinations:' "$parent" | grep -q 'namespace: pr-agent'
-is "the project allows the namespace of the agent as a destination" "$?"
+python3 - "$parent" <<'PY'
+import sys, yaml
+p = {d["metadata"]["name"]: d["spec"] for d in yaml.safe_load_all(open(sys.argv[1])) if d and d["kind"] == "AppProject"}
+assert sorted(p) == ["ai-agent", "pr-agent"], sorted(p)
+assert [x["namespace"] for x in p["ai-agent"]["destinations"]] == ["argocd", "ate-system"], p["ai-agent"]["destinations"]
+assert [x["namespace"] for x in p["pr-agent"]["destinations"]] == ["pr-agent"], p["pr-agent"]["destinations"]
+for k in ("sourceRepos", "clusterResourceWhitelist", "namespaceResourceWhitelist"):
+    assert p["pr-agent"][k] == p["ai-agent"][k], k
+PY
+is "the shared project has no agent namespace, and each agent has its own project with its namespace only and the same rules" "$?"
 grep -A12 '^  clusterResourceWhitelist:' "$parent" | grep -q 'kind: CustomResourceDefinition' && grep -A12 '^  clusterResourceWhitelist:' "$parent" | grep -q 'kind: Namespace'
 is "the project allows the cluster-scoped kinds that the children make" "$?"
-[ "$(wave "$parent" substrate)" = 'sync-wave: "0"' ] && [ "$(wave "$parent" pr-agent)" = 'sync-wave: "1"' ] && [ "$(wave "$parent" ai-agent)" = 'sync-wave: "-1"' ]
+[ "$(wave_of "$parent" Application substrate)" = 0 ] && [ "$(wave_of "$parent" Application pr-agent)" = 1 ] && [ "$(wave_of "$parent" AppProject ai-agent)" = -1 ]
 is "the project syncs first, then the control plane, then the agents" "$?"
+[ "$(wave_of "$parent" AppProject pr-agent)" -lt "$(wave_of "$parent" Application pr-agent)" ]
+is "the project of an agent has a lower wave than its Application, so removal prunes the Application first" "$?"
 
 stack="$work/incluster/stack.yaml"
 [ "$(install_value "$stack" config.ateapi.authz.bootstrapOwners)" = 'system:serviceaccount:ate-system:ate-client,system:serviceaccount:pr-agent:pr-agent-registration' ]
@@ -118,8 +136,8 @@ for suffix in actor registration idle-suspend webhook metrics; do
 done
 [ "$(app_names "$agent" | wc -l)" -eq 5 ] && [ "$(app_names "$agent" | sort -u | wc -l)" -eq 5 ]
 is "the agent chart renders five Applications with unique names" "$?"
-[ "$(grep -c '^  project: ai-agent$' "$agent")" -eq 5 ]
-is "every child Application uses the project ai-agent" "$?"
+[ "$(grep -c '^  project: pr-agent$' "$agent")" -eq 5 ]
+is "every child Application uses the project of the agent" "$?"
 [ "$(grep -c 'resources-finalizer.argocd.argoproj.io' "$agent")" -eq 5 ] && application "$parent" pr-agent | grep -q 'resources-finalizer.argocd.argoproj.io'
 is "every agent Application deletes what it made when it is removed" "$?"
 for suffix in actor registration idle-suspend webhook metrics; do
@@ -190,6 +208,8 @@ refuse "an unknown agent type fails" 'type' "agents:
   - {name: odd, type: other-agent, $addresses}"
 refuse "an agent with no type fails" 'type' "agents:
   - {name: odd, $addresses}"
+refuse "an agent named ai-agent fails" 'cannot be named ai-agent' "agents:
+  - {name: ai-agent, type: pr-agent, $addresses}"
 refuse "two agents in one namespace fail" 'two agents use the namespace' "agents:
   - {name: one, type: pr-agent, namespace: shared, $addresses}
   - {name: two, type: pr-agent, namespace: shared, $addresses}"
@@ -205,7 +225,7 @@ refuse "an agent name that is not a DNS label fails" 'name' "agents:
   - {name: Bad_Name, type: pr-agent, $addresses}"
 
 # ---- the checks of the agent chart ------------------------------------------------------
-base=(--set agent.name=a --set agent.atespace=a --set agent.namespace=a --set agent.gitlabUrl=http://gitlab.example.test --set agent.modelEndpoint=http://model.example.test:11434)
+base=(--set project=a --set agent.name=a --set agent.atespace=a --set agent.namespace=a --set agent.gitlabUrl=http://gitlab.example.test --set agent.modelEndpoint=http://model.example.test:11434)
 agent_chart() { helm template a "$repo/charts/agent" "${base[@]}" "$@"; }
 agent_fails() { # name, expected text, helm arguments
   local name="$1" text="$2" out

@@ -13,7 +13,7 @@ metadata:
     # After the actor. The registration Job reads the ConfigMaps that the actor chart renders.
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  project: ai-agent
+  project: {{ required "project is required: the parent chart passes the project of the agent" $.Values.project }}
   source:
     repoURL: {{ .Values.substrate.repoURL | quote }}
     targetRevision: {{ .Values.substrate.revision | quote }}
