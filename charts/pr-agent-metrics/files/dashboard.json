@@ -287,8 +287,8 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Work done per hour",
-      "description": "How many reviews, descriptions and improvement suggestions the agent finished in each hour.",
+      "title": "Work done",
+      "description": "Reviews, descriptions and improvement suggestions that finished. Each bar covers the time slice that ends at its right edge, so it lines up with the busy time beside it. Zoom out and the bars get wider.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -309,7 +309,8 @@
             "fillOpacity": 70,
             "lineWidth": 1,
             "showPoints": "never",
-            "spanNulls": false
+            "spanNulls": false,
+            "barAlignment": -1
           },
           "color": {
             "mode": "palette-classic"
@@ -334,9 +335,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"}[1h]))",
-          "legendFormat": "Review",
-          "interval": "1h"
+          "expr": "sum(increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"}[$__interval]))",
+          "legendFormat": "Review"
         },
         {
           "refId": "B",
@@ -344,9 +344,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"describe\"}[1h]))",
-          "legendFormat": "Describe",
-          "interval": "1h"
+          "expr": "sum(increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"describe\"}[$__interval]))",
+          "legendFormat": "Describe"
         },
         {
           "refId": "C",
@@ -354,11 +353,11 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"improve\"}[1h]))",
-          "legendFormat": "Suggest improvements",
-          "interval": "1h"
+          "expr": "sum(increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"improve\"}[$__interval]))",
+          "legendFormat": "Suggest improvements"
         }
-      ]
+      ],
+      "interval": "1m"
     },
     {
       "id": 6,
@@ -414,7 +413,8 @@
           "expr": "sum(pr_agent_commands_in_flight{ate_actor=\"__ACTOR__\"})",
           "legendFormat": "Commands running"
         }
-      ]
+      ],
+      "interval": "1m"
     },
     {
       "id": 7,
