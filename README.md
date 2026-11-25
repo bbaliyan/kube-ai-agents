@@ -77,19 +77,22 @@ Each pr-agent worker process has its own meter, so the actor patch gives each wo
 
 ## Dashboard
 
-Each agent can bring a simple Grafana dashboard, `Agent: <name>`. It shows numbers, charts and a table:
+Each agent can bring a simple Grafana dashboard, `Agent: <name>`. Every number follows the time range at the top right, so you can look at the last hour, 30 days or 57 days. It starts on the last 24 hours. Prometheus must keep the data for as long as you want to look back.
+
+Six numbers sit at the top:
 
 - Working right now? shows Busy or Idle.
-- Reviews started in the last 24 hours.
+- Reviews started.
+- Commands failed, as a share of the commands that ended. A command that pr-agent skipped does not count. Green is below 5 percent.
+- Answered by a fallback model, as a share of all commands. A high value means the main model fails or times out.
 - Model calls per review. A review that is cut into chunks shows a higher number.
-- Tokens used in the last 24 hours.
-- Work started: reviews, descriptions and improvement suggestions that started, in bars (pr-agent counts a command when it starts). A bar covers the slice of time that ends at its right edge, on the same time scale as the busy time beside it.
-- Busy time: when the agent runs a command.
-- Tokens read by the model, and tokens written by the model, in the last 24 hours. Two plain numbers: a review reads far more than it writes.
-- Commands that failed, in the last 24 hours, as a share of the commands that ended. A command that pr-agent skipped does not count.
-- Answered by a fallback model, in the last 24 hours, as a share of all commands. A high value means the main model fails or times out.
-- A table of the models that answered in the last 24 hours, and a timeline with one row for each model, which shows when each one answered. When you change the model, the old row stops and the new row starts. A fallback model has its own orange row, named `(fallback)`.
-- Failed commands over time, in bars. An empty chart means no failures.
+- Tokens used.
+
+Below them are three sections:
+
+- Activity: Work started, in bars (pr-agent counts a command when it starts), and Busy time, on the same time scale.
+- Models and failures: a timeline with one row for each model, which shows when each one answered (a fallback model has its own orange row), and the failed commands over time. An empty chart means no failures.
+- Details: a table of the models that answered, with their role (main or fallback) and their commands, and the tokens read and written by the model.
 
 The model and the outcome come from the actor patch (see "Reporting a running command"). pr-agent keeps both in its run details and does not report them as metrics. The patch adds the counters `pr_agent_commands_finished_total` (label `outcome`) and `pr_agent_commands_by_model_total` (labels `model` and `fallback`).
 
