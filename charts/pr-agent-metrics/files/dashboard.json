@@ -471,7 +471,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(((increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"}[$__interval]) + (min_over_time(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"}[$__interval]) unless pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"} offset $__interval)) or increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"}[$__interval])))",
+          "expr": "sum((((pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"} - pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"} offset $__interval) >= 0) or (pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"} unless pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"} offset $__interval) or (pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"} < pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"review\"} offset $__interval)))",
           "legendFormat": "Review"
         },
         {
@@ -480,7 +480,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(((increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"describe\"}[$__interval]) + (min_over_time(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"describe\"}[$__interval]) unless pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"describe\"} offset $__interval)) or increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"describe\"}[$__interval])))",
+          "expr": "sum((((pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"describe\"} - pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"describe\"} offset $__interval) >= 0) or (pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"describe\"} unless pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"describe\"} offset $__interval) or (pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"describe\"} < pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"describe\"} offset $__interval)))",
           "legendFormat": "Describe"
         },
         {
@@ -489,7 +489,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(((increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"improve\"}[$__interval]) + (min_over_time(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"improve\"}[$__interval]) unless pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"improve\"} offset $__interval)) or increase(pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"improve\"}[$__interval])))",
+          "expr": "sum((((pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"improve\"} - pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"improve\"} offset $__interval) >= 0) or (pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"improve\"} unless pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"improve\"} offset $__interval) or (pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"improve\"} < pr_agent_commands_total{ate_actor=\"__ACTOR__\",pr_agent_command=\"improve\"} offset $__interval)))",
           "legendFormat": "Suggest improvements"
         }
       ],
@@ -654,7 +654,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "label_replace(label_replace(sum by (model, fallback)(((increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[$__interval]) + (min_over_time(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[$__interval]) unless pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} offset $__interval)) or increase(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[$__interval]))), \"role\", \" (fallback)\", \"fallback\", \"true\"), \"role\", \"\", \"fallback\", \"false\") or (label_replace(vector(0), \"model\", \"No command answered yet\", \"\", \"\") unless sum(last_over_time(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[$__range])))",
+          "expr": "label_replace(label_replace(sum by (model, fallback)((((pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} - pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} offset $__interval) >= 0) or (pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} unless pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} offset $__interval) or (pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} < pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"} offset $__interval))), \"role\", \" (fallback)\", \"fallback\", \"true\"), \"role\", \"\", \"fallback\", \"false\") or (label_replace(vector(0), \"model\", \"No command answered yet\", \"\", \"\") unless sum(last_over_time(pr_agent_commands_by_model_total{ate_actor=\"__ACTOR__\"}[$__range])))",
           "legendFormat": "{{model}}{{role}}"
         }
       ],
@@ -679,7 +679,6 @@
         "defaults": {
           "unit": "none",
           "min": 0,
-          "softMax": 3,
           "decimals": 0,
           "noValue": "0",
           "custom": {
@@ -688,7 +687,9 @@
             "lineWidth": 1,
             "showPoints": "never",
             "spanNulls": false,
-            "barAlignment": -1
+            "barAlignment": -1,
+            "axisSoftMax": 3,
+            "axisSoftMin": 0
           },
           "color": {
             "mode": "fixed",
@@ -713,7 +714,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(((increase(pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"}[$__interval]) + (min_over_time(pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"}[$__interval]) unless pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} offset $__interval)) or increase(pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"}[$__interval]))) or vector(0)",
+          "expr": "sum((((pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} - pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} offset $__interval) >= 0) or (pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} unless pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} offset $__interval) or (pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} < pr_agent_commands_finished_total{ate_actor=\"__ACTOR__\",outcome=\"failed\"} offset $__interval))) or vector(0)",
           "legendFormat": "Failed"
         }
       ],
