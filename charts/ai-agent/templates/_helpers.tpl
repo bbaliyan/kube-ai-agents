@@ -1,4 +1,4 @@
-{{- /* The agents with their defaults, as JSON. It fails on a name, a namespace or an actor that two agents share. A name must also not make an Application name that another agent or the substrate stack already has: each agent makes <name>-actor, <name>-registration and more. */ -}}
+{{- /* The agents with their defaults, as JSON. It fails on the name ai-agent (the shared project), a name, a namespace or an actor that two agents share. A name must also not make an Application name that another agent or the substrate stack already has: each agent makes <name>-actor, <name>-registration and more. */ -}}
 {{- define "ai-agent.agents" -}}
 {{- $names := list -}}
 {{- $namespaces := list -}}
@@ -9,6 +9,7 @@
 {{- $name := required "every entry of agents needs a name" .name -}}
 {{- if not (has (default "" .type) (list "pr-agent")) }}{{ fail (printf "agents[%s].type must be pr-agent, got %q" $name (default "" .type)) }}{{ end -}}
 {{- $agent := mergeOverwrite (dict "atespace" $name "namespace" $name) (deepCopy .) -}}
+{{- if eq $name "ai-agent" }}{{ fail "an agent cannot be named ai-agent: each agent has a project with its own name, and ai-agent is the shared project" }}{{ end -}}
 {{- if has $name $names }}{{ fail (printf "two agents are named %q. Names must be unique" $name) }}{{ end -}}
 {{- if has $agent.namespace $namespaces }}{{ fail (printf "two agents use the namespace %q. Each agent needs its own namespace" $agent.namespace) }}{{ end -}}
 {{- $actor := printf "%s/%s" $agent.atespace (default "pr-agent" $agent.actorName) -}}

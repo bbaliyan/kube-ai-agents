@@ -12,7 +12,7 @@ metadata:
     # After the install, whose router allow-list names the shim. With the actor that the shim calls.
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  project: ai-agent
+  project: {{ required "project is required: the parent chart passes the project of the agent" $.Values.project }}
   source:
     repoURL: {{ .Values.self.repoURL | quote }}
     targetRevision: {{ .Values.self.revision | quote }}
