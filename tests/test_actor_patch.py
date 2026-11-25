@@ -134,6 +134,28 @@ class ActorPatchTest(unittest.TestCase):
         asyncio.run(PRAgent().handle_request())
         self.assertEqual([entry for entry in log if entry[0] == "create"], [("create", "pr_agent.commands_in_flight", "{command}")])
 
+    @unittest.skipUnless(hasattr(os, "fork"), "needs fork")
+    def test_each_forked_worker_gets_its_own_instance_id_and_the_master_does_not(self):
+        async def original(self):
+            return None
+
+        os.environ["OTEL_RESOURCE_ATTRIBUTES"] = "ate.actor=a/b"
+        self.addCleanup(os.environ.pop, "OTEL_RESOURCE_ATTRIBUTES", None)
+        install_stubs(self, original)
+        run_patch()
+        read, write = os.pipe()
+        pid = os.fork()
+        if pid == 0:
+            os.write(write, os.environ["OTEL_RESOURCE_ATTRIBUTES"].encode())
+            os._exit(0)
+        os.waitpid(pid, 0)
+        os.close(write)
+        child = os.read(read, 4096).decode()
+        os.close(read)
+        self.assertTrue(child.startswith("ate.actor=a/b,service.instance.id="), child)
+        self.assertIn(f"service.instance.id={pid}", child)
+        self.assertEqual(os.environ["OTEL_RESOURCE_ATTRIBUTES"], "ate.actor=a/b")
+
     def test_nothing_runs_when_telemetry_is_off(self):
         async def original(self):
             return "done"

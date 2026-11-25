@@ -74,6 +74,10 @@ agent:
   # model at once and a failed connection is retried once, so a dead main model costs about this long. Without
   # fallbackModels, pr-agent retries the same model, so a hung call costs twice this long.
   modelTimeoutSeconds: 300
+  # The number of pr-agent worker processes in the actor. Each runs its own event loop, so more workers handle more
+  # reviews at once. Give the actor about 1 CPU (cpuMillicores) and 1 GiB (memoryBytes) for each worker. When this is
+  # left out, pr-agent would pick 2 to 4 from the CPU limit.
+  workers: 2
   # Optional overrides of how pr-agent retries a failed model call, for each agent. Leave them unset (null) for the
   # defaults above: with fallbackModels, retrySameModelOnTimeout is false and modelRetries is 1; without, pr-agent
   # keeps its own defaults (true and 4). retrySameModelOnTimeout: replay a timed-out call on the same model.
