@@ -328,7 +328,7 @@ grep -q 'CONFIG__OUTPUT_RUN_DETAILS' <<<"$(agent_chart --show-only templates/act
 is "agent.runDetails false leaves the run details setting out" "$?"
 ! grep -q 'OTEL__IS_ENABLED' <<<"$(agent_chart --show-only templates/actor.yaml)"
 is "metrics are off when no endpoint is set" "$?"
-python3 - "$(agent_chart --set agent.metricsCollector.enabled=true --show-only templates/actor.yaml)" <<'PY'
+python3 - "$(agent_chart --set agent.metricsCollector.enabled=true --set 'agent.fallbackModels={ollama/small:8b,ollama/tiny:3b}' --set 'agent.modelContextLengths.ollama/small:8b=64000' --set 'agent.modelContextLengths.ollama/tiny:3b=8000' --show-only templates/actor.yaml)" <<'PY'
 import sys, yaml
 app = yaml.safe_load(sys.argv[1])
 command = app["spec"]["source"]["helm"]["valuesObject"]["actors"][0]["command"]
@@ -337,7 +337,7 @@ longest = max(len(part) for part in command)
 assert longest <= 3900, f"the inline command is {longest} characters, and the limit of Agent Substrate is 4096"
 assert "#" not in "".join(line.lstrip()[:1] for line in command[2].splitlines()), "a comment line is left in the inline command"
 PY
-is "the inline command of the actor with metrics is under the 4096 character limit of Agent Substrate, with no comment lines" "$?"
+is "the inline command of the actor with metrics and model lengths is under the 4096 character limit of Agent Substrate, with no comment lines" "$?"
 out="$(agent_chart --set agent.metricsCollector.enabled=true --show-only templates/actor.yaml)"
 grep -q 'OTEL__OTLP_ENDPOINT: http://pr-agent-metrics.a.svc.cluster.local:4318' <<<"$out" && grep -q 'ate-secret://k8s.io/default/a/pr-agent-metrics/password' <<<"$out" && ! grep -q 'GUNICORN_WORKERS' <<<"$out"
 is "the metrics collector is the OTLP endpoint of the actor, with the generated token sent by the egress proxy" "$?" "$out"
@@ -432,6 +432,17 @@ is "agent.maxWorkers sets the ceiling of the automatic worker count" "$?"
 agent_fails "zero workers fail" 'agent.workers' --set agent.workers=0
 agent_fails "a zero ceiling fails" 'agent.maxWorkers' --set agent.maxWorkers=0
 agent_fails "a model retry count above 10 fails" 'agent.modelRetries' --set agent.modelRetries=11
+out="$(agent_chart --set 'agent.fallbackModels={ollama/small:8b}' --set agent.contextLength=16000 --set 'agent.modelContextLengths.ollama/small:8b=64000' --show-only templates/actor.yaml)"
+grep -q 'MAX_TOKENS.update({"ollama/small:8b":64000})' <<<"$out" && grep -A1 'CONFIG__MAX_MODEL_TOKENS' <<<"$out" | grep -q '64000' && grep -A1 'CONFIG__CUSTOM_MODEL_MAX_TOKENS' <<<"$out" | grep -q '16000'
+is "modelContextLengths gives a model its own limit and raises the cap to the largest" "$?" "$out"
+! grep -q 'MAX_TOKENS.update' <<<"$(agent_chart --show-only templates/actor.yaml)"
+is "without modelContextLengths the command does not touch the table of pr-agent" "$?"
+agent_fails "a limit for a model that the agent does not use fails" 'agent.modelContextLengths names' --set 'agent.modelContextLengths.ollama/other=1000'
+grep -q 'CONFIG__CUSTOM_MODEL_MAX_TOKENS' <<<"$(agent_chart --set agent.contextLength=1000000 --show-only templates/actor.yaml)" && grep -A1 'CONFIG__CUSTOM_MODEL_MAX_TOKENS' <<<"$(agent_chart --set-json agent.contextLength=1000000 --show-only templates/actor.yaml)" | grep -q '"1000000"'
+is "a context length of one million stays a whole number" "$?"
+many="$(python3 -c 'import json; print(json.dumps(["ollama/a-model-with-a-long-name-%02d" % i for i in range(100)]))')"
+lengths="$(python3 -c 'import json; print(json.dumps({"ollama/a-model-with-a-long-name-%02d" % i: 1000 for i in range(100)}))')"
+agent_fails "so many model lengths that the command is too long fail" 'Agent Substrate refuses more than 4096' --set-json "agent.fallbackModels=$many" --set-json "agent.modelContextLengths=$lengths"
 agent_fails "a fallback model with another prefix fails" 'agent.fallbackModels must use the same prefix' --set 'agent.fallbackModels={openai/other}'
 agent_fails "a value that the schema does not know fails, so a typo does not pass silently" 'idleSuspnd' --set agent.idleSuspnd.enabled=true
 agent_fails "a nested value that the schema does not know fails" 'enable' --set agent.idleSuspend.enable=true

@@ -83,6 +83,16 @@ model: ollama/qwen3-coder:30b
 fallbackModels: [ollama/qwen3:8b]
 ```
 
+A fallback model can have a longer or shorter context than the main model. Give each such model its own context length in `modelContextLengths`, in tokens. pr-agent then sizes each call for the model that it calls. A model that is not in the list gets `contextLength`. A model that pr-agent already knows keeps the length that pr-agent has for it. No model gets more than the largest length that you set. The context length covers the input and the answer. pr-agent keeps only 1000 to 1500 tokens of it free for the answer.
+
+```yaml
+model: openai/large-model
+fallbackModels: [openai/small-model]
+contextLength: 32000
+modelContextLengths:
+  openai/large-model: 128000
+```
+
 ## Many reviews at once
 
 pr-agent runs each command as a task on the event loop of a worker process, with no queue and no limit. A worker also does some blocking GitLab calls on that loop, so one busy worker answers new webhook calls slowly, and GitLab gives up on a call after 10 seconds. To handle more reviews at once, run more worker processes. pr-agent counts them from the CPUs of the actor, so size the actor with `cpuMillicores` and `memoryBytes` and leave `workers` unset: a 2 CPU actor gets 2 workers and a 4 CPU actor gets 4 (measured in the gVisor sandbox), up to 4. Set `maxWorkers` to raise that ceiling, or `workers` to force a number. Start with about 1 CPU and 1 GiB for each worker, and make the worker pool of Agent Substrate (`substrate.workers.cpu` and `memory`) about twice the size of the actor. The metrics carry the id of the worker, so the workers do not overwrite each other (see "Reporting a running command").
