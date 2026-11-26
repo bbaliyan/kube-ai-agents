@@ -111,64 +111,65 @@ subjects:
     namespace: argocd
 {{- end }}
 {{- $user := printf "system:serviceaccount:argocd:%s" $name }}
-{{- /* RBAC cannot say who a binding may name, or where a route may point. These two policies apply to this account only. */}}
+{{- /*
+RBAC cannot say what a Role may hold within the rights of its writer, whom a binding may name, or where a route may
+point. Three policies say it, for this account only. Each one allows the shape that the charts of an agent make, and no
+other. A chart that makes another shape needs a change here, or its sync fails.
+*/ -}}
+{{- /* The one route of an agent: the host of its webhook shim. Without that route, the account makes no route. */ -}}
+{{- $host := dig "ingressRoute" "host" "" (.Values.agent.webhook | default dict) -}}
+{{- if not (dig "ingressRoute" "enabled" false (.Values.agent.webhook | default dict)) }}{{ $host = "" }}{{ end -}}
+{{- if and $host (not (regexMatch `^[A-Za-z0-9.-]+$` $host)) }}{{ fail (printf "agent.webhook.ingressRoute.host must be a host name, got %q" $host) }}{{ end -}}
+{{- $entryPoints := dig "ingressRoute" "entryPoints" (list "websecure") (.Values.agent.webhook | default dict) -}}
+{{- $roleRules := "!has(object.rules) || object.rules.all(r, !has(r.nonResourceURLs) && has(r.apiGroups) && r.apiGroups == [''] && has(r.resources) && ((r.resources == ['services'] && has(r.resourceNames) && r.resourceNames == ['api'] && r.verbs.all(v, v == 'get')) || (r.resources == ['pods'] && r.verbs.all(v, v == 'list')) || (r.resources == ['pods/portforward'] && r.verbs.all(v, v in ['get', 'create']))))" -}}
+{{- $route := "false" -}}
+{{- if $host -}}
+{{- $route = printf "object.spec.routes.all(r, r.match == 'Host(`%s`)' && !has(r.priority) && !has(r.syntax) && !has(r.middlewares) && !has(r.observability) && has(r.services) && r.services.all(s, (!has(s.kind) || s.kind == 'Service') && (!has(s.namespace) || s.namespace == object.metadata.namespace) && !s.name.contains('@') && !has(s.middlewares) && !has(s.serversTransport)))" $host -}}
+{{- end -}}
+{{- $policies := list
+  (dict "name" "roles" "group" "rbac.authorization.k8s.io" "resource" "roles" "validations" (list
+    (dict "expression" (printf "object.metadata.name in %s" (toJson $controlPlaneRoles)) "message" "the deployment account of an agent writes only the two Roles of the agent")
+    (dict "expression" $roleRules "message" "a Role of an agent only reads the Service api, lists Pods and forwards a port")))
+  (dict "name" "bindings" "group" "rbac.authorization.k8s.io" "resource" "rolebindings" "validations" (list
+    (dict "expression" (printf "object.roleRef.kind == 'Role' && object.roleRef.name in %s" (toJson $controlPlaneRoles)) "message" "the deployment account of an agent binds only the two Roles of the agent")
+    (dict "expression" (printf "has(object.subjects) && object.subjects.all(s, s.kind == 'ServiceAccount' && has(s.namespace) && s.namespace == '%s')" $namespace) "message" "the deployment account of an agent binds only to service accounts of the namespace of the agent")))
+  (dict "name" "routes" "group" "traefik.io" "resource" "ingressroutes" "validations" (list
+    (dict "expression" $route "message" "a route of an agent matches only the host of its webhook, and uses only Services of its namespace")
+    (dict "expression" (printf "has(object.spec.entryPoints) && object.spec.entryPoints.all(e, e in %s)" (toJson $entryPoints)) "message" "a route of an agent uses only the entry points of its webhook")
+    (dict "expression" "!has(object.spec.parentRefs) && !has(object.spec.ingressClassName) && (!has(object.spec.tls) || (!has(object.spec.tls.options) && !has(object.spec.tls.store) && !has(object.spec.tls.certResolver) && !has(object.spec.tls.domains)))" "message" "a route of an agent has no parent route, class or TLS setting other than the name of a Secret"))) -}}
+{{- $user := printf "system:serviceaccount:argocd:%s" $name }}
+{{- range $policies }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: {{ $name }}-bindings
+  name: {{ $name }}-{{ .name }}
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   failurePolicy: Fail
   matchConstraints:
     resourceRules:
-      - apiGroups: [rbac.authorization.k8s.io]
+      - apiGroups: [{{ .group }}]
         apiVersions: ["*"]
-        resources: [rolebindings]
+        resources: [{{ .resource }}]
         operations: [CREATE, UPDATE]
   matchConditions:
     - name: the-deployment-account
       expression: {{ printf "request.userInfo.username == '%s'" $user | quote }}
   validations:
-    - expression: {{ printf "object.roleRef.kind == 'Role' && object.roleRef.name in %s" (toJson $controlPlaneRoles) | quote }}
-      message: the deployment account of an agent binds only the two Roles of the agent
-    - expression: {{ printf "has(object.subjects) && object.subjects.all(s, s.kind == 'ServiceAccount' && has(s.namespace) && s.namespace == '%s')" $namespace | quote }}
-      message: the deployment account of an agent binds only to service accounts of the namespace of the agent
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicy
-metadata:
-  name: {{ $name }}-routes
-  annotations:
-    argocd.argoproj.io/sync-wave: "-1"
-spec:
-  failurePolicy: Fail
-  matchConstraints:
-    resourceRules:
-      - apiGroups: [traefik.io]
-        apiVersions: ["*"]
-        resources: [ingressroutes]
-        operations: [CREATE, UPDATE]
-  matchConditions:
-    - name: the-deployment-account
-      expression: {{ printf "request.userInfo.username == '%s'" $user | quote }}
-  validations:
-    # Only Services of the namespace of the route: no other namespace, and no TraefikService such as api@internal.
-    - expression: >-
-        object.spec.routes.all(r,
-        (!has(r.services) || r.services.all(s, (!has(s.kind) || s.kind == 'Service') && (!has(s.namespace) || s.namespace == object.metadata.namespace)))
-        && (!has(r.middlewares) || r.middlewares.all(m, !has(m.namespace) || m.namespace == object.metadata.namespace)))
-      message: a route of an agent uses only Services and Middlewares of its own namespace
-{{- range list "bindings" "routes" }}
+    {{- range .validations }}
+    - expression: {{ .expression | quote }}
+      message: {{ .message }}
+    {{- end }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: {{ $name }}-{{ . }}
+  name: {{ $name }}-{{ .name }}
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
 spec:
-  policyName: {{ $name }}-{{ . }}
+  policyName: {{ $name }}-{{ .name }}
   validationActions: [Deny]
 {{- end }}

@@ -297,7 +297,13 @@ is "each agent project names its deployment account for every destination, and t
 
 # Everything that the local child charts of an agent make must be covered by the rights of the account, and the account
 # must hold every rule that a Role of an agent grants in the control plane namespace.
-render_chain deploy "$incluster"
+python3 - "$incluster" "$work/routed.yaml" <<'PY'
+import sys, yaml
+values = yaml.safe_load(open(sys.argv[1]))
+values["agents"][0]["webhook"]["ingressRoute"] = {"enabled": True, "host": "review.example.test"}
+yaml.safe_dump(values, open(sys.argv[2], "w"))
+PY
+render_chain deploy "$work/routed.yaml"
 python3 - "$work/deploy" "$repo" <<'PY'
 import pathlib, subprocess, sys, yaml
 chain, repo = pathlib.Path(sys.argv[1]), sys.argv[2]
@@ -314,7 +320,7 @@ plane = "ate-system"
 plural = lambda kind: {"NetworkPolicy": "networkpolicies"}.get(kind, kind.lower() + "s")
 def allows(rules, group, resource, verb, obj=None):
     return any(group in r["apiGroups"] and resource in r["resources"] and verb in r["verbs"] and (not r.get("resourceNames") or obj in r["resourceNames"]) for r in rules)
-problems, checked = [], 0
+problems, checked, routes = [], 0, []
 for app in (d for d in tree if d["kind"] == "Application"):
     path = app["spec"]["source"]["path"]
     if not pathlib.Path(repo, path).is_dir() or app["spec"]["source"]["repoURL"] != agent["spec"]["source"]["repoURL"]:
@@ -324,6 +330,8 @@ for app in (d for d in tree if d["kind"] == "Application"):
     file.write_text(yaml.safe_dump(app["spec"]["source"]["helm"].get("valuesObject", {})))
     for doc in render(release, f"{repo}/{path}", "-n", app["spec"]["destination"]["namespace"], "-f", str(file)):
         checked += 1
+        if doc["kind"] == "IngressRoute":
+            routes.extend((r["match"], doc["spec"]["entryPoints"]) for r in doc["spec"]["routes"])
         group = doc["apiVersion"].rpartition("/")[0]
         namespace = doc["metadata"].get("namespace") or app["spec"]["destination"]["namespace"]
         obj = doc["metadata"]["name"]
@@ -347,10 +355,16 @@ if not allows(held, "", "namespaces", "get", plane):
 policies = {d["metadata"]["name"]: d["spec"] for d in tree if d["kind"] == "ValidatingAdmissionPolicy"}
 bound = {d["spec"]["policyName"] for d in tree if d["kind"] == "ValidatingAdmissionPolicyBinding" and d["spec"]["validationActions"] == ["Deny"]}
 user = f"request.userInfo.username == 'system:serviceaccount:argocd:{name}-deployer'"
-for policy, resource in ((f"{name}-deployer-bindings", "rolebindings"), (f"{name}-deployer-routes", "ingressroutes")):
+for policy, resource in ((f"{name}-deployer-roles", "roles"), (f"{name}-deployer-bindings", "rolebindings"), (f"{name}-deployer-routes", "ingressroutes")):
     spec = policies.get(policy)
     if not spec or policy not in bound or spec["failurePolicy"] != "Fail" or spec["matchConditions"][0]["expression"] != user             or spec["matchConstraints"]["resourceRules"][0]["resources"] != [resource]:
         problems.append(f"the policy {policy} is missing, not bound with Deny, or does not match the account and {resource}")
+allowed = [v["expression"] for v in policies.get(f"{name}-deployer-routes", {}).get("validations", [])]
+if not routes:
+    problems.append("the example renders no route, so the route policy is not compared with one")
+for match, entry_points in routes:
+    if not any(f"r.match == '{match}'" in e for e in allowed) or not any(all(f'"{p}"' in e for p in entry_points) for e in allowed):
+        problems.append(f"the route policy does not allow the route that the webhook chart makes: {match} {entry_points}")
 own = next(d for d in parent if d["kind"] == "AppProject" and d["metadata"]["name"] == "ai-agent-" + name)
 if "argocd" in {d["namespace"] for d in own["spec"]["destinations"]}:
     problems.append("the agent project reaches argocd, where its deployment account lives")
@@ -367,6 +381,10 @@ print("\n".join(sorted(set(problems))))
 sys.exit(1 if problems else 0)
 PY
 is "the deployment account covers what the child charts make, and holds no more in the control plane namespace than their Roles need" "$?"
+
+out="$(helm template d "$repo/charts/agent" -f "$repo/tests/values/agent/minimal.yaml" --set agent.webhook=null --show-only templates/deployer.yaml)"
+grep -q 'expression: "false"' <<<"$out"
+is "the account of an agent without a webhook route can make no route" "$?" "$out"
 
 # ---- what the parent refuses ----------------------------------------------------------
 refuse() { # name, expected error text, the agents block
