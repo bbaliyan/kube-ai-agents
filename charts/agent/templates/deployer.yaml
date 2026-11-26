@@ -113,7 +113,7 @@ subjects:
 {{- $user := printf "system:serviceaccount:argocd:%s" $name }}
 {{- /*
 RBAC cannot say what a Role may hold within the rights of its writer, whom a binding may name, or where a route may
-point. Three policies say it, for this account only. Each one allows the shape that the charts of an agent make, and no
+point, and it cannot say what a Service or a ServiceMonitor may hold. The policies say it, for this account only. Each one allows the shape that the charts of an agent make, and no
 other. A chart that makes another shape needs a change here, or its sync fails.
 */ -}}
 {{- /* The one route of an agent: the host of its webhook shim. Without that route, the account makes no route. */ -}}
@@ -136,7 +136,12 @@ other. A chart that makes another shape needs a change here, or its sync fails.
   (dict "name" "routes" "group" "traefik.io" "resource" "ingressroutes" "validations" (list
     (dict "expression" $route "message" "a route of an agent matches only the host of its webhook, and uses only Services of its namespace")
     (dict "expression" (printf "has(object.spec.entryPoints) && object.spec.entryPoints.all(e, e in %s)" (toJson $entryPoints)) "message" "a route of an agent uses only the entry points of its webhook")
-    (dict "expression" "!has(object.spec.parentRefs) && !has(object.spec.ingressClassName) && (!has(object.spec.tls) || (!has(object.spec.tls.options) && !has(object.spec.tls.store) && !has(object.spec.tls.certResolver) && !has(object.spec.tls.domains)))" "message" "a route of an agent has no parent route, class or TLS setting other than the name of a Secret"))) -}}
+    (dict "expression" "!has(object.spec.parentRefs) && !has(object.spec.ingressClassName) && (!has(object.spec.tls) || (!has(object.spec.tls.options) && !has(object.spec.tls.store) && !has(object.spec.tls.certResolver) && !has(object.spec.tls.domains)))" "message" "a route of an agent has no parent route, class or TLS setting other than the name of a Secret")))
+  (dict "name" "services" "group" "" "resource" "services" "validations" (list
+    (dict "expression" "(!has(object.spec.type) || object.spec.type == 'ClusterIP') && !has(object.spec.externalIPs)" "message" "a Service of an agent is a ClusterIP Service with no external IP")))
+  (dict "name" "monitors" "group" "monitoring.coreos.com" "resource" "servicemonitors" "validations" (list
+    (dict "expression" "!has(object.spec.namespaceSelector) && !has(object.spec.attachMetadata) && !has(object.spec.scrapeClass)" "message" "a ServiceMonitor of an agent selects only Services of its own namespace")
+    (dict "expression" "!has(object.spec.endpoints) || object.spec.endpoints.all(e, !has(e.bearerTokenFile) && !has(e.bearerTokenSecret) && !has(e.authorization) && !has(e.basicAuth) && !has(e.oauth2) && !has(e.tlsConfig) && !has(e.proxyUrl) && !has(e.params) && !has(e.relabelings))" "message" "a ServiceMonitor of an agent sends no credential and changes no target address"))) -}}
 {{- $user := printf "system:serviceaccount:argocd:%s" $name }}
 {{- range $policies }}
 ---
@@ -150,7 +155,7 @@ spec:
   failurePolicy: Fail
   matchConstraints:
     resourceRules:
-      - apiGroups: [{{ .group }}]
+      - apiGroups: [{{ .group | quote }}]
         apiVersions: ["*"]
         resources: [{{ .resource }}]
         operations: [CREATE, UPDATE]

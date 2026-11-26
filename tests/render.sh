@@ -330,6 +330,13 @@ for app in (d for d in tree if d["kind"] == "Application"):
     file.write_text(yaml.safe_dump(app["spec"]["source"]["helm"].get("valuesObject", {})))
     for doc in render(release, f"{repo}/{path}", "-n", app["spec"]["destination"]["namespace"], "-f", str(file)):
         checked += 1
+        if doc["kind"] == "Service" and (doc["spec"].get("type", "ClusterIP") != "ClusterIP" or "externalIPs" in doc["spec"]):
+            problems.append(f"{release}: the policy refuses the Service {doc['metadata']['name']}")
+        if doc["kind"] == "ServiceMonitor":
+            extra = {"namespaceSelector", "attachMetadata", "scrapeClass"} & set(doc["spec"])
+            extra |= {"bearerTokenFile", "bearerTokenSecret", "authorization", "basicAuth", "oauth2", "tlsConfig", "proxyUrl", "params", "relabelings"} & {k for e in doc["spec"]["endpoints"] for k in e}
+            if extra:
+                problems.append(f"{release}: the policy refuses the ServiceMonitor fields {sorted(extra)}")
         if doc["kind"] == "IngressRoute":
             routes.extend((r["match"], doc["spec"]["entryPoints"]) for r in doc["spec"]["routes"])
         group = doc["apiVersion"].rpartition("/")[0]
@@ -355,7 +362,7 @@ if not allows(held, "", "namespaces", "get", plane):
 policies = {d["metadata"]["name"]: d["spec"] for d in tree if d["kind"] == "ValidatingAdmissionPolicy"}
 bound = {d["spec"]["policyName"] for d in tree if d["kind"] == "ValidatingAdmissionPolicyBinding" and d["spec"]["validationActions"] == ["Deny"]}
 user = f"request.userInfo.username == 'system:serviceaccount:argocd:{name}-deployer'"
-for policy, resource in ((f"{name}-deployer-roles", "roles"), (f"{name}-deployer-bindings", "rolebindings"), (f"{name}-deployer-routes", "ingressroutes")):
+for policy, resource in ((f"{name}-deployer-roles", "roles"), (f"{name}-deployer-bindings", "rolebindings"), (f"{name}-deployer-routes", "ingressroutes"), (f"{name}-deployer-services", "services"), (f"{name}-deployer-monitors", "servicemonitors")):
     spec = policies.get(policy)
     if not spec or policy not in bound or spec["failurePolicy"] != "Fail" or spec["matchConditions"][0]["expression"] != user             or spec["matchConstraints"]["resourceRules"][0]["resources"] != [resource]:
         problems.append(f"the policy {policy} is missing, not bound with Deny, or does not match the account and {resource}")
