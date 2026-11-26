@@ -60,17 +60,22 @@ application() { awk -v name="$2" '/^kind:/ {kind = $2} $0 == "  name: " name && 
 
 ai_agent() { helm template p "$repo/charts/ai-agent" "$@"; }
 # The chain for one fixture: the parent, the substrate stack, the credential policy and each agent.
+# rendered collects the files of every chain that can hold an Application or AppProject.
+rendered=()
 render_chain() { # name, values file
   local dir="$work/$1" agent
   mkdir -p "$dir"
   ai_agent -f "$2" >"$dir/parent.yaml" || return 1
+  rendered+=("$dir/parent.yaml")
   app_values "$dir/parent.yaml" substrate "$dir/stack-values.yaml" || return 1
   helm template stack "$repo/charts/substrate-stack" -f "$dir/stack-values.yaml" >"$dir/stack.yaml" || return 1
+  rendered+=("$dir/stack.yaml")
   app_values "$dir/stack.yaml" substrate-credential-policy "$dir/policy-values.yaml" || return 1
   helm template policy "$repo/charts/substrate-credential-policy" -f "$dir/policy-values.yaml" >"$dir/policy.yaml" || return 1
   for agent in $(app_names "$dir/parent.yaml" | grep -vx 'substrate'); do
     app_values "$dir/parent.yaml" "$agent" "$dir/$agent-values.yaml" || return 1
     helm template "$agent" "$repo/charts/agent" -f "$dir/$agent-values.yaml" >"$dir/$agent.yaml" || return 1
+    rendered+=("$dir/$agent.yaml")
   done
 }
 
@@ -137,19 +142,6 @@ is "a misspelled key of the metrics chart fails the schema" "$((1 - $?))"
 helm template policy "$repo/charts/substrate-credential-policy" --set 'agents[0].atespace=a' >/dev/null 2>&1
 is "an agent entry without a namespace fails the policy schema" "$((1 - $?))"
 
-python3 - "$work/incluster/parent.yaml" "$stack" "$work/incluster/pr-agent.yaml" <<'PY'
-import sys, yaml
-want = "resources-finalizer.argocd.argoproj.io"
-docs = [d for path in sys.argv[1:] for d in yaml.safe_load_all(open(path)) if d and d["kind"] in ("Application", "AppProject")]
-names = {d["metadata"]["name"] for d in docs}
-expected = {"substrate", "substrate-install", "substrate-workers", "substrate-credential-policy", "pr-agent", "ai-agents-stack",
-            "ai-agent-pr-agent", "pr-agent-actor", "pr-agent-registration", "pr-agent-idle-suspend", "pr-agent-webhook", "pr-agent-metrics"}
-missing = sorted(d["metadata"]["name"] for d in docs if want not in d["metadata"].get("finalizers", []))
-if not expected <= names or missing:
-    sys.exit(f"not rendered: {sorted(expected - names)}, without the finalizer: {missing}")
-PY
-is "every Application and AppProject that the charts render has the resources finalizer" "$?"
-
 agent="$work/incluster/pr-agent.yaml"
 for suffix in actor registration idle-suspend webhook metrics; do
   grep -q "^  name: pr-agent-$suffix\$" "$agent"
@@ -159,8 +151,6 @@ done
 is "the agent chart renders five Applications with unique names" "$?"
 [ "$(grep -c '^  project: ai-agent-pr-agent$' "$agent")" -eq 5 ]
 is "every child Application uses the project of the agent" "$?"
-[ "$(grep -c 'resources-finalizer.argocd.argoproj.io' "$agent")" -eq 5 ] && application "$parent" pr-agent | grep -q 'resources-finalizer.argocd.argoproj.io'
-is "every agent Application deletes what it made when it is removed" "$?"
 for suffix in actor registration idle-suspend webhook metrics; do
   grep -q "releaseName: pr-agent-$suffix\$" "$agent"
   is "the Application pr-agent-$suffix sets its release name" "$?" missing
@@ -613,6 +603,12 @@ parent = json.load(open(f"{root}/charts/ai-agent/values.schema.json"))["definiti
 sys.exit(0 if chart == parent else 1)
 PY
 is "the agent schema of the parent chart is the same as the schema of the agent chart" "$?"
+
+# ---- removal: every rendered chain ------------------------------------------------------------
+out="$("${CHECKS:-/usr/share/kube-devenv/checks}/argocd-removal.sh" "${rendered[@]}" 2>&1)"
+is "every Application and AppProject that the charts render has the resources finalizer" "$?" "$out"
+! grep -l 'kube-stack/keep-resources-on-delete' "${rendered[@]}"
+is "no object of the agent stack keeps its resources: removal deletes them all" "$?"
 
 if [ "$failures" -gt 0 ]; then echo "$failures failed"; exit 1; fi
 echo "all passed"
