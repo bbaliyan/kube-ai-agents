@@ -196,7 +196,11 @@ YAML
 } >"$two_idle"
 render_chain two "$two_idle"
 is "two agents with idle suspend render" "$?"
-application "$work/two/stack.yaml" substrate-workers | grep -A3 'observability:' | grep -q 'enabled: true'   && application "$work/two/stack.yaml" substrate-workers | grep -A3 'observability:' | grep -q 'release: prometheus' && ! app_names "$work/two/stack.yaml" | grep -qx 'substrate-monitors'
+app_values "$work/two/stack.yaml" substrate-workers "$work/two/workers-values.yaml" && python3 - "$work/two/workers-values.yaml" <<'PY' && ! app_names "$work/two/stack.yaml" | grep -qx 'substrate-monitors'
+import sys, yaml
+got = yaml.safe_load(open(sys.argv[1])).get("observability")
+sys.exit(0 if got == {"enabled": True, "podMonitorLabels": {"release": "prometheus"}} else 1)
+PY
 is "with idle suspend the workers chart makes the PodMonitors, once for any number of agents" "$?"
 ! application "$work/external/stack.yaml" substrate-workers | grep -q 'observability:'
 is "the stack makes no PodMonitors when no agent has idle suspend" "$?"

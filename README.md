@@ -102,7 +102,7 @@ To turn it on, set `agent.dashboard.enabled: true`. It needs `agent.metricsColle
 
 ## Suspend idle actors
 
-Substrate v1.0.1 never suspends an idle actor. The chart `substrate-idle-suspend` runs a CronJob that does it for the actors you list. The `agent` chart deploys it for each agent that sets `agent.idleSuspend.enabled`, with the actor of that agent. The CronJob uses the registration image, which is built in the repository kube-agent-substrate (`images/substrate-registration`) and pulled by digest. A release with an empty `actors` list renders only the PodMonitors, so one release can own the scrape objects of the control plane while other releases list the actors. You can delete the chart when upstream ships its own idle policy.
+Substrate v1.0.1 never suspends an idle actor. The chart `substrate-idle-suspend` runs a CronJob that does it for the actors you list. The `agent` chart deploys it for each agent that sets `agent.idleSuspend.enabled`, with the actor of that agent. The CronJob uses the registration image, which is built in the repository kube-agent-substrate (`images/substrate-registration`) and pulled by digest. You can delete the chart when upstream ships its own idle policy.
 
 Warnings:
 
@@ -172,7 +172,7 @@ Each actor of `substrate-actor` has its own template, so a template signal is an
 
 ## PodMonitors
 
-When an agent turns on idle suspend, the `substrate-stack` chart turns on `observability` of the `substrate-workers` chart of Agent Substrate. That chart makes the PodMonitors of the control plane, once for all agents, and each series carries the label `app` of its pod. Set the label that Prometheus selects them by in `substrate.podMonitorLabels`.
+When an agent turns on idle suspend, the `substrate-stack` chart turns on `observability` of the `substrate-workers` chart of Agent Substrate. That chart makes the PodMonitors of the control plane, once for all agents, and each series carries the label `app` of its pod. Set the label that Prometheus selects them by in `substrate.podMonitorLabels`. Do not set `observability.enabled: false` in `substrate.workers.helmValues`: without the PodMonitors the idle suspend cannot read its signals, so it suspends nothing.
 
 ## Tests
 

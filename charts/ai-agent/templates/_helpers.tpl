@@ -4,7 +4,7 @@
 {{- $namespaces := list -}}
 {{- $actors := list -}}
 {{- $resolved := list -}}
-{{- $applications := list "substrate" "substrate-credential-policy" "substrate-install" "substrate-workers" "substrate-monitors" -}}
+{{- $applications := list "substrate" "substrate-credential-policy" "substrate-install" "substrate-workers" -}}
 {{- range .Values.agents -}}
 {{- $name := required "every entry of agents needs a name" .name -}}
 {{- if not (has (default "" .type) (list "pr-agent")) }}{{ fail (printf "agents[%s].type must be pr-agent, got %q" $name (default "" .type)) }}{{ end -}}
