@@ -27,18 +27,14 @@ lint-yaml:
 
 # Lint every chart and validate what it renders. Argo CD, External Secrets and Prometheus own most of the
 # kinds, and no catalog has a schema for all of them, so a missing schema is skipped.
-# The chart agent needs the values that ai-agent gives it, and ai-agent is rendered with each example.
+# The test values of each chart are in tests/values/<chart>/ (HELM_VALUES_ROOT, an absolute path because the script runs
+# in the chart directory). The chart agent needs the values that ai-agent gives it, and ai-agent is rendered with each example.
 charts: export KUBECONFORM_IGNORE_MISSING_SCHEMAS = 1
+charts: export HELM_VALUES_ROOT = $(CURDIR)/tests/values
 charts:
-	for chart in substrate-stack substrate-credential-policy pr-agent-webhook pr-agent-metrics; do \
+	for chart in agent substrate-stack substrate-credential-policy substrate-idle-suspend pr-agent-webhook pr-agent-metrics; do \
 		$(CHECKS)/helm-kubeconform.sh charts/$$chart; \
 	done
-	for values in tests/values/substrate-idle-suspend/*.yaml; do \
-		helm lint charts/substrate-idle-suspend --values $$values; \
-		helm template charts/substrate-idle-suspend --values $$values | kubeconform -strict -summary -ignore-missing-schemas; \
-	done
-	helm lint charts/agent --values tests/values/agent/minimal.yaml
-	helm template charts/agent --values tests/values/agent/minimal.yaml | kubeconform -strict -summary -ignore-missing-schemas
 	for example in examples/*.yaml; do \
 		helm lint charts/ai-agent --values $$example; \
 		helm template charts/ai-agent --values $$example | kubeconform -strict -summary -ignore-missing-schemas; \
