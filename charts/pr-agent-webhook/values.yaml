@@ -43,8 +43,9 @@ resources:
   requests: {cpu: 50m, memory: 64Mi}
   limits: {cpu: 500m, memory: 256Mi}
 
-# The from entries of a NetworkPolicy on the shim port. Empty renders no policy. With ingressRoute,
-# add the namespace of Traefik.
+# Required. The from entries of the NetworkPolicy of the shim. The policy denies all other incoming traffic,
+# and the chart does not render with an empty list. With ingressRoute, add the pods of Traefik.
+# See the README, "Who can call the shim".
 allowFrom: []
 
 # A Traefik route for a sender outside the cluster. The host is a consumer input. With no tlsSecretName,

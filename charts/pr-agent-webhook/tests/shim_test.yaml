@@ -3,6 +3,10 @@ templates:
   - templates/shim.yaml
   - templates/networkpolicy.yaml
   - templates/ingressroute.yaml
+# The chart needs a sender. This one stands for every test that is not about allowFrom.
+set:
+  allowFrom:
+    - podSelector: {matchLabels: {app: sender}}
 tests:
   - it: renders a service account, a config map, a deployment and a service, named after the actor
     template: templates/shim.yaml
@@ -14,10 +18,19 @@ tests:
       - containsDocument: {kind: Service, apiVersion: v1, name: pr-agent-webhook}
         documentIndex: 3
 
-  - it: renders no network policy and no route by default
+  - it: renders a policy that denies all incoming traffic but the senders, and no route by default
     asserts:
-      - hasDocuments:
-          count: 0
+      - equal:
+          path: spec.policyTypes
+          value: [Ingress]
+        template: templates/networkpolicy.yaml
+      - equal:
+          path: spec.ingress
+          value:
+            - from:
+                - podSelector: {matchLabels: {app: sender}}
+              ports:
+                - {port: 8080, protocol: TCP}
         template: templates/networkpolicy.yaml
       - hasDocuments:
           count: 0
@@ -310,6 +323,23 @@ tests:
       - equal:
           path: spec.podSelector.matchLabels["app.kubernetes.io/name"]
           value: pr-agent-webhook
+
+  - it: does not render with an empty allowFrom
+    template: templates/networkpolicy.yaml
+    set:
+      allowFrom: []
+    asserts:
+      - failedTemplate:
+          errorPattern: "allowFrom is empty"
+
+  - it: rejects an empty allowFrom entry, which would select every sender
+    template: templates/networkpolicy.yaml
+    set:
+      allowFrom:
+        - {}
+    asserts:
+      - failedTemplate:
+          errorPattern: "allowFrom"
 
   - it: rejects an allowFrom entry with an unknown key
     template: templates/networkpolicy.yaml

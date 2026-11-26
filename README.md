@@ -44,6 +44,35 @@ Names must be unique. The chart fails if two agents share a name, a namespace, o
 
 The chart `agent` does not fill the pipeline route of the shim. Pass `webhook.pipeline` in full: `enabled`, `issuer`, `jwksUri` and `namespacePaths`.
 
+## Who can call the shim
+
+The shim has a NetworkPolicy that denies all incoming traffic. Only the senders in `webhook.allowFrom` reach its port. The list has no default, and the shim does not render when it is empty. Each entry is a `from` entry of a NetworkPolicy.
+
+> **Breaking change:** a consumer with a `webhook` and no `allowFrom` must add the list before it moves to this revision. Until then, the shim Application shows a render error, and Argo CD does not change the shim.
+
+List each sender that you use:
+
+| Sender | Entry |
+|---|---|
+| GitLab in the cluster | The GitLab pods that send webhooks. |
+| `webhook.ingressRoute`, or another ingress or gateway | The pods of that controller. An external GitLab and a CI job that calls the route need only this entry. |
+| A CI job that calls the Service of the shim | The pods of the CI jobs. |
+
+Put `namespaceSelector` and `podSelector` in one entry, so only those pods of that namespace match:
+
+```yaml
+webhook:
+  allowFrom:
+    - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: traefik}}
+      podSelector: {matchLabels: {app.kubernetes.io/name: traefik}}
+```
+
+- Probes need no entry. A pod always accepts traffic from its own node.
+- The shim has no metrics port, so Prometheus needs no entry.
+- The registration and idle suspend Jobs do not call the shim.
+- Your CNI must enforce NetworkPolicy. Without that, the policy has no effect.
+- On some CNIs, such as Cilium, an `ipBlock` matches no pod and no node. Use selectors for pods. A controller on the host network can need a policy of your CNI.
+
 ## Names
 
 For an agent named `reviewer`, the Applications are `reviewer`, `reviewer-actor`, `reviewer-registration`, `reviewer-idle-suspend`, `reviewer-webhook` and `reviewer-metrics`. The service accounts are `reviewer-registration`, `reviewer-idle-suspend` and `reviewer-webhook`.

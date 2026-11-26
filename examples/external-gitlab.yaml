@@ -27,6 +27,14 @@ agents:
     egressTrustBundle: true
     webhook:
       port: 8080
+      # The GitLab server is outside the cluster, so the sender is the ingress controller that forwards to the shim.
+      allowFrom:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress
+          podSelector:
+            matchLabels:
+              app: ingress-controller
   - name: reviewer-docs
     type: pr-agent
     namespace: reviewer-docs-agent

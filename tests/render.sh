@@ -586,7 +586,7 @@ grep -A1 'unregister:' <<<"$out" | grep -q 'enabled: true'
 is "agent.registration.unregister turns on unregister.enabled in the registration chart" "$?" "$out"
 
 # ---- the shim chart takes the name that the parent gives it ----------------------------------
-out="$(helm template s "$repo/charts/pr-agent-webhook" --set name=a-webhook --set actor.name=pr-agent)"
+out="$(helm template s "$repo/charts/pr-agent-webhook" --set name=a-webhook --set actor.name=pr-agent --set 'allowFrom[0].ipBlock.cidr=192.0.2.0/24')"
 grep -q 'kind: ServiceAccount' <<<"$out" && grep -q '^  name: a-webhook$' <<<"$out" && ! grep -q '^  name: pr-agent-webhook$' <<<"$out"
 is "the shim chart names its service account from the name value, not from the actor" "$?" "$out"
 

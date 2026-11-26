@@ -1,0 +1,3 @@
+# The smallest set of values that renders.
+allowFrom:
+  - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: gitlab}}

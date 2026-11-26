@@ -15,10 +15,15 @@ agents:
     gitlabUrl: http://gitlab.example.test
     webhook:
       port: 8080
+      # The GitLab pods send the webhook. A CI job that uses the pipeline route calls the shim from its
+      # own pod, or through an ingress controller: add that sender too.
       allowFrom:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: gitlab
+          podSelector:
+            matchLabels:
+              app: gitlab
       pipeline:
         enabled: true
         issuer: https://gitlab.example.test
