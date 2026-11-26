@@ -113,7 +113,7 @@ What stays open. This list holds what we found. It is not a proof that nothing e
 - It can forward a port to any Pod of the control plane namespace, because the Jobs of an agent need that to reach the API.
 - The policies trust the host in `webhook.ingressRoute.host`. If another application serves that host, the route of the agent competes with it.
 - No policy limits what a Pod of the agent connects to. Limit that with NetworkPolicies.
-- A ServiceMonitor can keep the labels that its target sends (`honorLabels`), so an agent can send series that look like those of another application.
+- A ServiceMonitor can keep the labels that its target sends (`honorLabels`) or rewrite them (`metricRelabelings`). An agent can then send series that look like those of another application. Prometheus also follows a redirect of its target to another HTTP address.
 - The account makes ConfigMaps. A component that reads labelled ConfigMaps of every namespace, such as a Grafana sidecar, reads these too. Limit it to the namespaces that you trust.
 
 ## Removing an agent
