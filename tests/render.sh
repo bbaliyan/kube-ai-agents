@@ -376,9 +376,13 @@ assert cm["metadata"]["labels"]["grafana_dashboard"] == "1"
 assert d["uid"] == "ai-agent-reviewer" and d["title"] == "Agent: reviewer" and len(d["panels"]) == 16
 exprs = [t["expr"] for p in d["panels"] for t in p.get("targets", [])]
 assert not any("[24h]" in e for e in exprs), "a panel has a fixed 24 hour window, and must follow the time range"
-assert all(e.count("increase(") == 2 * e.count("min_over_time(") for e in exprs), "a panel counts with a bare increase(), which loses the first value of a new series"
+assert all("min_over_time(" in e and "last_over_time(" in e and " unless max without" in e for e in exprs if "increase(" in e), "a panel counts with a bare increase(), which loses the first value of a new series"
 assert all("increase(" not in e for e in exprs if "$__interval" in e), "a chart counts a bucket with increase(), which loses a jump between two buckets"
-assert all("offset $__interval" in e for e in exprs if "$__interval" in e and "pr_agent_" in e), "a bucket count must compare the counter with the counter one bucket ago"
+assert all("[7d] offset $__interval" in e for e in exprs if "$__interval" in e and "_total{" in e), "a bucket count must compare the counter with the last value known before the bucket, or a gap counts the old events again"
+import re
+merge = "max without (job, endpoint, container, service, pod, instance) ("
+unmerged = [e for e in exprs for m in re.finditer(r"pr_agent_[a-z_]+_total[{]", e) if not e[:m.start()].endswith((merge, merge + "last_over_time("))]
+assert not unmerged, "a counter reads a series with its scrape labels, so a restart of the collector counts the old events again: " + unmerged[0]
 timeline = [x for x in d["panels"] if x["id"] == 12][0]
 assert any(o["matcher"]["options"] == "No command answered yet" and o["properties"][0]["id"] == "custom.hideFrom" and o["properties"][0]["value"]["viz"] for o in timeline["fieldConfig"]["overrides"]), "the placeholder row of the timeline must be hidden from the chart"
 assert "No command answered yet" in timeline["targets"][0]["expr"], "the timeline needs the placeholder so that it never has an empty result"
