@@ -17,7 +17,9 @@ spec:
     - {{ .Values.substrate.repoURL | quote }}
     {{- end }}
   destinations:
+    {{- /* Also the namespace of each agent: the parent of an agent makes the Role of its deployment account there. */}}
     {{- $namespaces := list "argocd" .Values.substrate.namespace }}
+    {{- range include "ai-agent.agents" . | fromJsonArray }}{{ $namespaces = append $namespaces .namespace }}{{ end }}
     {{- range $namespaces | uniq }}
     - server: https://kubernetes.default.svc
       namespace: {{ . }}
@@ -59,6 +61,12 @@ spec:
     # The registration and idle suspend charts put a Role and a RoleBinding here, so the Job and the CronJob can reach the control plane.
     - server: https://kubernetes.default.svc
       namespace: {{ $.Values.substrate.namespace }}
+  # With application sync impersonation on, Argo CD deploys every Application of this project with this account,
+  # wherever the Application points. The chart agent makes the account and its rights.
+  destinationServiceAccounts:
+    - server: "*"
+      namespace: "*"
+      defaultServiceAccount: argocd:{{ .name }}-deployer
   # No child of an agent makes a cluster-scoped object. The control plane does, and it uses the shared project.
   clusterResourceWhitelist: []
   namespaceResourceWhitelist:

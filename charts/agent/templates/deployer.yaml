@@ -1,0 +1,107 @@
+{{- /*
+The account that Argo CD deploys the Applications of this agent with, when application sync impersonation is on. The
+project of the agent names it for every destination. It lives in argocd, where no Application of the agent can make a
+Pod, so nothing that the agent deploys can run as it. The parent of the agent makes it before the Applications (wave -1)
+and Argo CD removes it after them, because their finalizers delete with this account too.
+*/ -}}
+{{- $name := printf "%s-deployer" .Values.agent.name -}}
+{{- $namespace := required "agent.namespace is required" .Values.agent.namespace -}}
+{{- /* The names that the charts substrate-registration and substrate-idle-suspend give their Role and RoleBinding. */ -}}
+{{- $controlPlaneRoles := list -}}
+{{- range list (list "registration" "substrate-registration") (list "idle-suspend" "substrate-idle-suspend") -}}
+{{- $release := printf "%s-%s" $.Values.agent.name (index . 0) -}}
+{{- $chart := index . 1 -}}
+{{- $full := ternary $release (printf "%s-%s" $release $chart) (contains $chart $release) -}}
+{{- $controlPlaneRoles = append $controlPlaneRoles ($full | trunc 40 | trimSuffix "-") -}}
+{{- end -}}
+{{- $manage := list "get" "list" "watch" "create" "update" "patch" "delete" -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+automountServiceAccountToken: false
+---
+# What the charts of an agent make in its own namespace. No Secrets, no Roles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ $namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: [""]
+    resources: [configmaps, serviceaccounts, services]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [batch]
+    resources: [cronjobs, jobs]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [external-secrets.io]
+    resources: [externalsecrets]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [generators.external-secrets.io]
+    resources: [passwords]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [monitoring.coreos.com]
+    resources: [servicemonitors]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [traefik.io]
+    resources: [ingressroutes]
+    verbs: {{ toJson $manage }}
+---
+# In the namespace of the control plane an agent only makes the two Roles of its Jobs, and their bindings. Kubernetes
+# lets an account grant only what it holds, so it holds the three rules of those Roles and neither bind nor escalate.
+# It reads, changes and deletes only its own Roles. A rule that a chart adds to its Role must be added here too, or
+# the sync fails.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Values.substrate.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    verbs: [create]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    resourceNames: {{ toJson $controlPlaneRoles }}
+    verbs: [get, update, patch, delete]
+  - apiGroups: [""]
+    resources: [services]
+    resourceNames: [api]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list]
+  - apiGroups: [""]
+    resources: [pods/portforward]
+    verbs: [get, create]
+{{- range list $namespace .Values.substrate.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: argocd
+{{- end }}

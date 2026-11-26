@@ -10,6 +10,7 @@
 {{- if not (has (default "" .type) (list "pr-agent")) }}{{ fail (printf "agents[%s].type must be pr-agent, got %q" $name (default "" .type)) }}{{ end -}}
 {{- $agent := mergeOverwrite (dict "atespace" $name "namespace" $name) (deepCopy .) -}}
 {{- if has $name $names }}{{ fail (printf "two agents are named %q. Names must be unique" $name) }}{{ end -}}
+{{- if has $agent.namespace (list "argocd" $.Values.substrate.namespace) }}{{ fail (printf "agents[%s].namespace must not be argocd or the namespace of the control plane, got %q. The deployment account of an agent has broad rights in the namespace of the agent" $name $agent.namespace) }}{{ end -}}
 {{- if has $agent.namespace $namespaces }}{{ fail (printf "two agents use the namespace %q. Each agent needs its own namespace" $agent.namespace) }}{{ end -}}
 {{- $actor := printf "%s/%s" $agent.atespace (default "pr-agent" $agent.actorName) -}}
 {{- if has $actor $actors }}{{ fail (printf "two agents use the actor %q. An actor name must be unique in its atespace" $actor) }}{{ end -}}
