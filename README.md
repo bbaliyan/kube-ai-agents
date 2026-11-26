@@ -46,15 +46,15 @@ The chart `agent` does not fill the pipeline route of the shim. Pass `webhook.pi
 
 ## Who can call the shim
 
-The shim has a NetworkPolicy that denies all incoming traffic. Only the senders in `webhook.allowFrom` reach its port. The list has no default, and the shim does not render when it is empty. Each entry is a `from` entry of a NetworkPolicy.
+The shim has a NetworkPolicy that denies incoming traffic, except to its port from the senders in `webhook.allowFrom`. Each entry is a `from` entry of a NetworkPolicy. An agent with a `webhook` must list at least one sender, or the parent chart does not render.
 
-> **Breaking change:** a consumer with a `webhook` and no `allowFrom` must add the list before it moves to this revision. Until then, the shim Application shows a render error, and Argo CD does not change the shim.
+The chart refuses an empty selector and a CIDR that ends in `/0`, because they allow every sender. It cannot find every broad entry. For example, a `DoesNotExist` expression or two large CIDRs can also allow almost everything. Read your list.
 
 List each sender that you use:
 
 | Sender | Entry |
 |---|---|
-| GitLab in the cluster | The GitLab pods that send webhooks. |
+| GitLab in the cluster | The GitLab pods that send webhooks. With the GitLab Helm chart, list the Sidekiq and the web service pods. |
 | `webhook.ingressRoute`, or another ingress or gateway | The pods of that controller. An external GitLab and a CI job that calls the route need only this entry. |
 | A CI job that calls the Service of the shim | The pods of the CI jobs. |
 
@@ -67,7 +67,15 @@ webhook:
       podSelector: {matchLabels: {app.kubernetes.io/name: traefik}}
 ```
 
-- Probes need no entry. A pod always accepts traffic from its own node.
+What the policy does not do:
+
+- Network policies add up. Another policy in the namespace that selects the shim can allow more senders.
+- A NetworkPolicy does not block the node of the shim. This includes the pods on the host network of that node.
+- If you list an ingress controller, everyone who can reach the route can call the shim. Then only the webhook secret and, for the pipeline route, the job token protect it.
+
+Also:
+
+- Probes need no entry. They come from the node of the shim.
 - The shim has no metrics port, so Prometheus needs no entry.
 - The registration and idle suspend Jobs do not call the shim.
 - Your CNI must enforce NetworkPolicy. Without that, the policy has no effect.
@@ -117,13 +125,14 @@ The account can do this:
 - In the namespace of the agent: manage the kinds that the charts of an agent make. It cannot read or write a Secret, and it cannot make a Role.
 - In the namespace of the control plane: make Roles and bindings, and change only the two of the agent. Their rules can give no more than the account holds. That is: read the namespace and the Service `api`, list Pods, forward a port to a Pod, and manage the two Roles and bindings. It cannot make a Pod or read a Secret there.
 
-Kubernetes lets an account write any Role within its own rights and name anyone in a binding. RBAC also says nothing about what an object holds. Five [ValidatingAdmissionPolicies](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/) limit what the account writes:
+Kubernetes lets an account write any Role within its own rights and name anyone in a binding. RBAC also says nothing about what an object holds. Six [ValidatingAdmissionPolicies](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/) limit what the account writes:
 
 - Roles: only the two of the agent, with no other rules than reading the Service `api`, listing Pods and forwarding a port.
 - Bindings: only to those two Roles, and only for service accounts of the namespace of the agent.
 - Traefik routes: only `Host` with the host of `webhook.ingressRoute`, on its entry points, to Services of the namespace of the agent. A route has no priority, no Middleware and no TLS setting other than the name of a Secret. An agent without that route can make none.
 - Services: only `ClusterIP`, with no external IP.
 - ServiceMonitors: only Services of their own namespace, with no credential, proxy or change of the target address.
+- NetworkPolicies: only those of the shim and the metrics collector. They select named Pods, allow no outgoing traffic, and allow incoming traffic only from named senders. The account can still change the senders in them.
 
 **You must also enforce a Pod Security level on the namespace of each agent.** The account makes Deployments and Jobs there. Without this, a Pod can be privileged or mount the disk of its node, and that gives control of the cluster. The Pods of the charts pass the strictest level:
 

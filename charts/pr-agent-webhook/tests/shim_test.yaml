@@ -341,6 +341,81 @@ tests:
       - failedTemplate:
           errorPattern: "allowFrom"
 
+  - it: rejects an allowFrom entry with an empty namespace selector
+    template: templates/networkpolicy.yaml
+    set:
+      allowFrom:
+        - namespaceSelector: {}
+    asserts:
+      - failedTemplate:
+          errorPattern: "allowFrom"
+
+  - it: rejects an allowFrom entry with an empty pod selector
+    template: templates/networkpolicy.yaml
+    set:
+      allowFrom:
+        - podSelector: {}
+    asserts:
+      - failedTemplate:
+          errorPattern: "allowFrom"
+
+  - it: rejects an allowFrom entry with empty matchLabels
+    template: templates/networkpolicy.yaml
+    set:
+      allowFrom:
+        - namespaceSelector: {matchLabels: {}}
+    asserts:
+      - failedTemplate:
+          errorPattern: "allowFrom"
+
+  - it: rejects an allowFrom entry with empty matchExpressions
+    template: templates/networkpolicy.yaml
+    set:
+      allowFrom:
+        - namespaceSelector: {matchExpressions: []}
+    asserts:
+      - failedTemplate:
+          errorPattern: "allowFrom"
+
+  - it: rejects an allowFrom entry with every IPv4 address
+    template: templates/networkpolicy.yaml
+    set:
+      allowFrom:
+        - ipBlock: {cidr: 0.0.0.0/0}
+    asserts:
+      - failedTemplate:
+          errorPattern: "allowFrom"
+
+  - it: rejects an allowFrom entry with every IPv6 address
+    template: templates/networkpolicy.yaml
+    set:
+      allowFrom:
+        - ipBlock: {cidr: "::/0"}
+    asserts:
+      - failedTemplate:
+          errorPattern: "allowFrom"
+
+  - it: rejects an allowFrom entry with an ipBlock with a selector
+    template: templates/networkpolicy.yaml
+    set:
+      allowFrom:
+        - ipBlock: {cidr: 192.0.2.0/24}
+          podSelector: {matchLabels: {app: sender}}
+    asserts:
+      - failedTemplate:
+          errorPattern: "allowFrom"
+
+  - it: accepts a sender by address and a sender by expression
+    template: templates/networkpolicy.yaml
+    set:
+      allowFrom:
+        - ipBlock: {cidr: 192.0.2.0/24}
+        - namespaceSelector: {matchExpressions: [{key: team, operator: In, values: [a]}]}
+    asserts:
+      - lengthEqual:
+          path: spec.ingress[0].from
+          count: 2
+
   - it: rejects an allowFrom entry with an unknown key
     template: templates/networkpolicy.yaml
     set:

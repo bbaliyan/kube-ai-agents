@@ -320,7 +320,7 @@ plane = "ate-system"
 plural = lambda kind: {"NetworkPolicy": "networkpolicies"}.get(kind, kind.lower() + "s")
 def allows(rules, group, resource, verb, obj=None):
     return any(group in r["apiGroups"] and resource in r["resources"] and verb in r["verbs"] and (not r.get("resourceNames") or obj in r["resourceNames"]) for r in rules)
-problems, checked, routes = [], 0, []
+problems, checked, routes, network_policies = [], 0, [], []
 for app in (d for d in tree if d["kind"] == "Application"):
     path = app["spec"]["source"]["path"]
     if not pathlib.Path(repo, path).is_dir() or app["spec"]["source"]["repoURL"] != agent["spec"]["source"]["repoURL"]:
@@ -342,6 +342,11 @@ for app in (d for d in tree if d["kind"] == "Application"):
         group = doc["apiVersion"].rpartition("/")[0]
         namespace = doc["metadata"].get("namespace") or app["spec"]["destination"]["namespace"]
         obj = doc["metadata"]["name"]
+        if doc["kind"] == "NetworkPolicy":
+            network_policies.append(obj)
+            peers = [p for r in doc["spec"].get("ingress", []) for p in r.get("from") or [None]]
+            if "egress" in doc["spec"] or not doc["spec"]["podSelector"].get("matchLabels") or not all(peers):
+                problems.append(f"{release}: the policy refuses the NetworkPolicy {obj}")
         resource = plural(doc["kind"])
         rules = roles.get(namespace, [])
         for verb in ("create", "patch", "delete") + (("get",) if namespace == plane else ()):
@@ -362,7 +367,7 @@ if not allows(held, "", "namespaces", "get", plane):
 policies = {d["metadata"]["name"]: d["spec"] for d in tree if d["kind"] == "ValidatingAdmissionPolicy"}
 bound = {d["spec"]["policyName"] for d in tree if d["kind"] == "ValidatingAdmissionPolicyBinding" and d["spec"]["validationActions"] == ["Deny"]}
 user = f"request.userInfo.username == 'system:serviceaccount:argocd:{name}-deployer'"
-for policy, resource in ((f"{name}-deployer-roles", "roles"), (f"{name}-deployer-bindings", "rolebindings"), (f"{name}-deployer-routes", "ingressroutes"), (f"{name}-deployer-services", "services"), (f"{name}-deployer-monitors", "servicemonitors")):
+for policy, resource in ((f"{name}-deployer-roles", "roles"), (f"{name}-deployer-bindings", "rolebindings"), (f"{name}-deployer-routes", "ingressroutes"), (f"{name}-deployer-services", "services"), (f"{name}-deployer-monitors", "servicemonitors"), (f"{name}-deployer-networkpolicies", "networkpolicies")):
     spec = policies.get(policy)
     if not spec or policy not in bound or spec["failurePolicy"] != "Fail" or spec["matchConditions"][0]["expression"] != user             or spec["matchConstraints"]["resourceRules"][0]["resources"] != [resource]:
         problems.append(f"the policy {policy} is missing, not bound with Deny, or does not match the account and {resource}")
@@ -372,6 +377,12 @@ if not routes:
 for match, entry_points in routes:
     if not any(f"r.match == '{match}'" in e for e in allowed) or not any(all(f'"{p}"' in e for p in entry_points) for e in allowed):
         problems.append(f"the route policy does not allow the route that the webhook chart makes: {match} {entry_points}")
+names = [v["expression"] for v in policies.get(f"{name}-deployer-networkpolicies", {}).get("validations", [])]
+if f"{name}-webhook" not in network_policies:
+    problems.append("the example renders no network policy of the shim, so its name is not compared")
+for made in network_policies:
+    if not any(e.startswith("object.metadata.name in ") and f'"{made}"' in e for e in names):
+        problems.append(f"the network policy rule does not allow {made}, which a child chart makes")
 own = next(d for d in parent if d["kind"] == "AppProject" and d["metadata"]["name"] == "ai-agent-" + name)
 if "argocd" in {d["namespace"] for d in own["spec"]["destinations"]}:
     problems.append("the agent project reaches argocd, where its deployment account lives")
@@ -401,6 +412,8 @@ refuse() { # name, expected error text, the agents block
   [ $? -ne 0 ] && grep -q "$2" <<<"$out"
   is "$1" "$?" "$out"
 }
+refuse "an agent with a webhook and no sender fails in the parent" 'allowFrom' 'agents: [{name: a, type: pr-agent, webhook: {port: 8080}}]'
+refuse "an agent with a webhook and an empty sender list fails in the parent" 'allowFrom' 'agents: [{name: a, type: pr-agent, webhook: {port: 8080, allowFrom: []}}]'
 refuse "an agent in the namespace of the control plane" "must not be argocd or the namespace of the control plane" 'agents: [{name: a, type: pr-agent, namespace: ate-system}]'
 refuse "an agent in the namespace of Argo CD" "must not be argocd or the namespace of the control plane" 'agents: [{name: argocd, type: pr-agent}]'
 addresses='modelEndpoint: "http://model.example.test:11434", gitlabUrl: "http://gitlab.example.test"'
@@ -565,15 +578,16 @@ agent_fails "a fallback model with another prefix fails" 'agent.fallbackModels m
 agent_fails "a value that the schema does not know fails, so a typo does not pass silently" 'idleSuspnd' --set agent.idleSuspnd.enabled=true
 agent_fails "a nested value that the schema does not know fails" 'enable' --set agent.idleSuspend.enable=true
 agent_fails "a model timeout that is not a number fails" 'agent.modelTimeoutSeconds' --set agent.modelTimeoutSeconds=abc
+agent_fails "a webhook with no sender fails in the agent chart" 'allowFrom' --set agent.webhook.port=8080
 agent_fails "idle suspend with no Prometheus address fails" 'agent.idleSuspend.prometheusUrl is required' --set agent.idleSuspend.enabled=true
 
 # ---- the webhook and the registration -------------------------------------------------------
-out="$(agent_chart --set agent.webhook.port=8080 --set agent.hopToken=custom-hop --set agent.webhook.hopToken=other --show-only templates/webhook.yaml)"
+out="$(agent_chart --set agent.webhook.port=8080 --set 'agent.webhook.allowFrom[0].podSelector.matchLabels.app=sender' --set agent.hopToken=custom-hop --set agent.webhook.hopToken=other --show-only templates/webhook.yaml)"
 grep -q 'hopToken: custom-hop' <<<"$out" && ! grep -q 'hopToken: other' <<<"$out" && grep -q 'name: a-webhook$' <<<"$out" && grep -q 'name: pr-agent$' <<<"$out"
 is "the shim gets its name, the actor and the hop token of the agent, whatever the webhook values say" "$?" "$out"
 ! grep -q 'name: a-webhook' <<<"$(agent_chart)"
 is "an empty agent.webhook renders no shim" "$?"
-out="$(agent_chart --set agent.webhook.port=8080 --set agent.webhook.pipeline.enabled=true --set agent.webhook.pipeline.issuer=https://gitlab.example.test --set agent.webhook.pipeline.jwksUri=https://gitlab.example.test/oauth/discovery/keys --set 'agent.webhook.pipeline.namespacePaths={team}' --show-only templates/webhook.yaml)"
+out="$(agent_chart --set agent.webhook.port=8080 --set 'agent.webhook.allowFrom[0].podSelector.matchLabels.app=sender' --set agent.webhook.pipeline.enabled=true --set agent.webhook.pipeline.issuer=https://gitlab.example.test --set agent.webhook.pipeline.jwksUri=https://gitlab.example.test/oauth/discovery/keys --set 'agent.webhook.pipeline.namespacePaths={team}' --show-only templates/webhook.yaml)"
 grep -q 'issuer: https://gitlab.example.test' <<<"$out" && grep -q 'jwksUri: https://gitlab.example.test/oauth/discovery/keys' <<<"$out" && grep -q -- '- team' <<<"$out"
 is "the pipeline route values pass through in full, with no defaulting" "$?" "$out"
 ! grep -q 'accessBindings' <<<"$(agent_chart --show-only templates/registration.yaml)"
