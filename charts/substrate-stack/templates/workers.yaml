@@ -20,6 +20,8 @@ spec:
             "cpu" (.Values.substrate.workers.cpu | toString)
             "memory" .Values.substrate.workers.memory)
           "selinux" (dict "enabled" true "type" "container_engine_t") -}}
+        {{- /* The idle suspend reads the metrics of the control plane, which upstream scrapes only on GKE. */ -}}
+        {{- range .Values.agents }}{{ if .idleSuspend }}{{ $_ := set $workers "observability" (dict "enabled" true "podMonitorLabels" $.Values.substrate.podMonitorLabels) }}{{ end }}{{ end }}
         {{- mergeOverwrite $workers .Values.substrate.workers.helmValues | toYaml | nindent 8 }}
   destination:
     server: https://kubernetes.default.svc

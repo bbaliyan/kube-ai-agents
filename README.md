@@ -12,7 +12,7 @@ You point one Argo CD Application at the chart `ai-agent` and list your agents i
 | `charts/substrate-stack` | The shared control plane: the credential policy, the install and the workers. |
 | `charts/substrate-credential-policy` | The namespace policy of the credential provider, built from the list of agents. |
 | `charts/agent` | One agent: the actor, its registration, idle suspend, the webhook shim and the metrics collector. |
-| `charts/substrate-idle-suspend` | A CronJob that suspends idle actors from Prometheus metrics, and the PodMonitors of the control plane. The `agent` chart deploys it for each agent, and `substrate-stack` deploys it once for the PodMonitors. |
+| `charts/substrate-idle-suspend` | A CronJob that suspends idle actors from Prometheus metrics. The `agent` chart deploys it for each agent. |
 | `charts/pr-agent-webhook` | The GitLab webhook shim, an Envoy proxy. |
 | `charts/pr-agent-metrics` | An OpenTelemetry collector for the metrics of pr-agent. |
 
@@ -110,7 +110,7 @@ Warnings:
 - A request that is younger than one scrape interval is not in the data yet. Keep `idleMinutes` well above the scrape interval.
 - Upstream v1.0.1 documents no drain of a running request on suspend. A suspend at that moment can cut the request.
 
-The chart needs a Prometheus that scrapes `atenet-router`, `atenet-egress`, `ate-api-server` and `atelet`. With the Prometheus Operator, the PodMonitors come from `substrate-stack` (see PodMonitors). The PodMonitors are in the control plane namespace, so the `podMonitorNamespaceSelector` of the Prometheus must include it. Upstream makes a scrape object only on GKE.
+The chart needs a Prometheus that scrapes `atenet-router`, `atenet-egress`, `ate-api-server` and `atelet`. With the Prometheus Operator, the PodMonitors come from the `substrate-workers` chart (see PodMonitors). The PodMonitors are in the control plane namespace, so the `podMonitorNamespaceSelector` of the Prometheus must include it. Upstream makes a scrape object only on GKE.
 
 ### How long to wait
 
@@ -140,7 +140,6 @@ If Prometheus needs a bearer token, set `prometheus.bearerTokenSecret.name`. If 
 | `idleCpuCores` | `0.05` | CPU cores that still count as idle |
 | `suspendMode` | `async` | `async` (the upstream default) or `sync`: how the snapshot becomes durable |
 | `prometheus.url` | `http://prometheus-operated.monitoring.svc:9090` | Base URL of Prometheus |
-| `podMonitors.enabled`, `podMonitors.labels`, `podMonitors.interval` | `false`, `{}`, `30s` | PodMonitors of the Prometheus Operator for the four components that feed the signals. They are made in the control plane namespace. |
 | `prometheus.timeoutSeconds` | `20` | Time limit of one query |
 | `queries.*` | see `values.yaml` | The PromQL of each signal |
 | `image.digest` | all zeros | Digest of the registration image |
@@ -173,7 +172,7 @@ Each actor of `substrate-actor` has its own template, so a template signal is an
 
 ## PodMonitors
 
-When an agent turns on idle suspend, the `substrate-stack` chart makes one Application, `substrate-monitors`. It renders the PodMonitors of the control plane from the chart `substrate-idle-suspend` (an empty `actors` list), so no agent owns them. Set the label that Prometheus selects them by in `substrate.podMonitorLabels`.
+When an agent turns on idle suspend, the `substrate-stack` chart turns on `observability` of the `substrate-workers` chart of Agent Substrate. That chart makes the PodMonitors of the control plane, once for all agents, and each series carries the label `app` of its pod. Set the label that Prometheus selects them by in `substrate.podMonitorLabels`.
 
 ## Tests
 

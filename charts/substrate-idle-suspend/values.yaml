@@ -1,6 +1,4 @@
 # The actors to watch. Use the same atespace and name as in the substrate-actor chart.
-# With no actors the chart renders only the PodMonitors (if podMonitors.enabled), so one release can own the scrape objects
-# of the control plane for all agents.
 actors: []
 #  - atespace: reviews
 #    name: pr-review
@@ -113,15 +111,6 @@ resources:
 
 nodeSelector: {}
 tolerations: []
-
-# PodMonitors of the Prometheus Operator for the components that feed the signals: the router, the egress proxy, the
-# API server and the atelet. Upstream makes a scrape object only on GKE (PodMonitoring), so a cluster with the
-# Prometheus Operator turns this on. `labels` must match the podMonitorSelector of the Prometheus.
-podMonitors:
-  enabled: false
-  labels: {}
-  # Keep it well below idleMinutes: a request younger than one scrape is not in the data yet.
-  interval: 30s
 
 serviceAccount:
   name: ""
