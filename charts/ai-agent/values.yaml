@@ -22,7 +22,7 @@ substrate:
   nodeSelector: {}
   # Makes the stub of the GKE PodMonitoring CRD, in the substrate-install chart. A cluster without the GKE operator needs it.
   podMonitoringCrdStub: true
-  # The label that Prometheus selects PodMonitors by. The stack makes the PodMonitors of the control plane when an agent turns on idle suspend.
+  # The label that Prometheus selects PodMonitors by. The workers chart makes the PodMonitors of the control plane when an agent turns on idle suspend.
   podMonitorLabels:
     release: prometheus
   install:

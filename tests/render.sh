@@ -156,8 +156,8 @@ application "$agent" pr-agent-registration | grep -q 'name: pr-agent-registratio
 is "the registration service account is <agent>-registration" "$?"
 application "$agent" pr-agent-registration | grep -q 'user:system:serviceaccount:pr-agent:pr-agent-idle-suspend'
 is "the registration grants the idle suspend account the editor role" "$?"
-application "$agent" pr-agent-idle-suspend | grep -q 'name: pr-agent-idle-suspend$' && ! application "$agent" pr-agent-idle-suspend | grep -q 'podMonitors:'
-is "idle suspend sets its service account and leaves the PodMonitors to the stack" "$?"
+application "$agent" pr-agent-idle-suspend | grep -q 'name: pr-agent-idle-suspend$'
+is "idle suspend sets its service account" "$?"
 application "$agent" pr-agent-idle-suspend | grep -q 'repoURL: "https://github.com/bbaliyan/kube-ai-agents"' && application "$agent" pr-agent-idle-suspend | grep -q 'path: charts/substrate-idle-suspend$'   && application "$agent" pr-agent-registration | grep -q 'repoURL: "https://github.com/bbaliyan/kube-agent-substrate"'
 is "idle suspend comes from this repository (self) and the registration from Agent Substrate" "$?"
 [ "$(for suffix in actor webhook metrics registration idle-suspend; do wave_of "$agent" Application "pr-agent-$suffix"; done | tr '\n' ' ')" = '0 0 0 1 2 ' ]
@@ -196,13 +196,10 @@ YAML
 } >"$two_idle"
 render_chain two "$two_idle"
 is "two agents with idle suspend render" "$?"
-[ "$(app_names "$work/two/stack.yaml" | grep -cx 'substrate-monitors')" -eq 1 ] && application "$work/two/stack.yaml" substrate-monitors | grep -q 'enabled: true' \
-  && application "$work/two/stack.yaml" substrate-monitors | grep -q 'release: prometheus' && ! grep -q 'podMonitors:' "$work/two/first.yaml" "$work/two/second.yaml"
-is "the stack makes one monitors Application for any number of agents with idle suspend" "$?"
-application "$work/two/stack.yaml" substrate-monitors | grep -q 'repoURL: "https://github.com/bbaliyan/kube-ai-agents"' && application "$work/two/stack.yaml" substrate-monitors | grep -q 'path: charts/substrate-idle-suspend$'
-is "the monitors Application comes from this repository (self)" "$?"
-! app_names "$work/external/stack.yaml" | grep -qx 'substrate-monitors'
-is "the stack makes no monitors Application when no agent has idle suspend" "$?"
+application "$work/two/stack.yaml" substrate-workers | grep -A3 'observability:' | grep -q 'enabled: true'   && application "$work/two/stack.yaml" substrate-workers | grep -A3 'observability:' | grep -q 'release: prometheus' && ! app_names "$work/two/stack.yaml" | grep -qx 'substrate-monitors'
+is "with idle suspend the workers chart makes the PodMonitors, once for any number of agents" "$?"
+! application "$work/external/stack.yaml" substrate-workers | grep -q 'observability:'
+is "the stack makes no PodMonitors when no agent has idle suspend" "$?"
 
 # What each agent deploys must fit its project: every object in a permitted namespace, and no cluster-scoped kind.
 # The Applications of the agent chart are rendered, then each source chart is rendered with the values that the Application gives.

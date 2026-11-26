@@ -4,15 +4,6 @@
   "additionalProperties": false,
   "required": ["actors", "schedule", "idleMinutes", "idleCpuCores", "suspendMode", "prometheus", "queries", "substrate", "image"],
   "properties": {
-    "podMonitors": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "enabled": { "type": "boolean" },
-        "labels": { "type": "object", "additionalProperties": { "type": "string" } },
-        "interval": { "type": "string", "pattern": "^([0-9]+(h|m|s))+$" }
-      }
-    },
     "busy": {
       "type": "object",
       "additionalProperties": false,
