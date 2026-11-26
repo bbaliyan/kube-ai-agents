@@ -3,6 +3,9 @@ kind: AppProject
 metadata:
   name: ai-agents-stack
   namespace: argocd
+  finalizers:
+    # Argo CD keeps the project until no Application uses it, so the finalizers of the Applications can finish.
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     # Before every Application that uses it.
     argocd.argoproj.io/sync-wave: "-1"
@@ -35,6 +38,9 @@ metadata:
   # The prefix keeps the name apart from projects that exist for other uses, such as default.
   name: ai-agent-{{ .name }}
   namespace: argocd
+  finalizers:
+    # Argo CD keeps the project until no Application uses it, so the finalizers of the Applications can finish.
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     # Below the wave of the Application of the agent (1). On sync the project exists before its
     # Applications. On removal Argo CD prunes the higher wave first, so the Applications and their

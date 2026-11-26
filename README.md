@@ -52,16 +52,22 @@ The metrics collector uses fixed resource names in its namespace, so each agent 
 
 ## Removing the stack
 
-The Applications `substrate`, `substrate-credential-policy` and `substrate-workers` have the resources finalizer, so Argo CD deletes what they made. The Application `substrate-install` has none on purpose: a cascade could delete the namespace of the control plane with its database. Argo CD removes that Application and leaves the control plane running.
+Every Application and project of the stack has the resources finalizer. When you delete the root Application with cascade, Argo CD deletes the Applications and what they made. The finalizer of a project keeps it until no Application uses it.
+
+The cascade stops the running actors, because it deletes the worker pool. It does not delete the control plane. The namespace `ate-system` is marked `Prune=false,Delete=false`, and the install Job creates the control plane outside Argo CD.
 
 To remove the control plane too, do these steps.
 
-> **Warning:** the next steps delete the database of the control plane. You cannot undo this.
+> **Warning:** these steps delete the database of the control plane. You cannot undo this.
 
-1. Verify that no agent is left in `agents`.
-2. Remove the stack.
-3. Delete the namespace `ate-system` with `kubectl delete namespace ate-system`.
-4. Delete the cluster-scoped objects of the control plane that remain.
+1. Remove every agent from `agents` and let Argo CD sync.
+2. Delete the root Application with cascade, and wait until its Applications are gone.
+3. Delete the namespace with `kubectl delete namespace ate-system`.
+4. Delete the namespace `podcertificate-controller-system`.
+5. List the cluster-scoped objects with `kubectl get crd,clusterrole,clusterrolebinding,clustertrustbundle -o name`.
+6. Delete the CustomResourceDefinitions whose name ends in `.ate.dev`.
+7. Delete the ClusterRoles and bindings `ate-api-server`, `ate-controller`, `atelet` and `podcert-ate-dev-signer`.
+8. Delete the ClusterTrustBundles whose name contains `ate.dev`.
 
 ## Removing an agent
 

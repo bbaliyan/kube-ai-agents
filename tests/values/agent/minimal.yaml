@@ -1,6 +1,6 @@
 # The smallest set of values that renders. The chart ai-agent fills them in a real release.
 substrate:
-  revision: daf5c1be4d93cf027a34f1466620033110c81512
+  revision: 34a66cbd02d42616c9deb3abdfebffe6d35ff82e
 project: pr-agent
 agent:
   name: pr-agent

@@ -3,8 +3,9 @@ kind: Application
 metadata:
   name: substrate-install
   namespace: argocd
-  # No resources finalizer on purpose. The install can own the namespace of the control plane, so a cascade
-  # would delete the control plane with its database. Removing it is a manual step (README, "Removing the stack").
+  finalizers:
+    # Deleting the Application deletes what it made. Without it, Argo CD leaves its objects behind.
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:

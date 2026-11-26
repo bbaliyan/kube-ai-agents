@@ -137,14 +137,18 @@ is "a misspelled key of the metrics chart fails the schema" "$((1 - $?))"
 helm template policy "$repo/charts/substrate-credential-policy" --set 'agents[0].atespace=a' >/dev/null 2>&1
 is "an agent entry without a namespace fails the policy schema" "$((1 - $?))"
 
-for name in substrate-credential-policy substrate-workers; do
-  application "$stack" "$name" | grep -q 'resources-finalizer.argocd.argoproj.io'
-  is "removing the Application $name deletes what it made" "$?"
-done
-application "$parent" substrate | grep -q 'resources-finalizer.argocd.argoproj.io'
-is "removing the Application substrate deletes its Applications" "$?"
-! application "$stack" substrate-install | grep -q 'resources-finalizer.argocd.argoproj.io'
-is "the install has no resources finalizer, so a cascade cannot delete the control plane and its database" "$?"
+python3 - "$work/incluster/parent.yaml" "$stack" "$work/incluster/pr-agent.yaml" <<'PY'
+import sys, yaml
+want = "resources-finalizer.argocd.argoproj.io"
+docs = [d for path in sys.argv[1:] for d in yaml.safe_load_all(open(path)) if d and d["kind"] in ("Application", "AppProject")]
+names = {d["metadata"]["name"] for d in docs}
+expected = {"substrate", "substrate-install", "substrate-workers", "substrate-credential-policy", "pr-agent", "ai-agents-stack",
+            "ai-agent-pr-agent", "pr-agent-actor", "pr-agent-registration", "pr-agent-idle-suspend", "pr-agent-webhook", "pr-agent-metrics"}
+missing = sorted(d["metadata"]["name"] for d in docs if want not in d["metadata"].get("finalizers", []))
+if not expected <= names or missing:
+    sys.exit(f"not rendered: {sorted(expected - names)}, without the finalizer: {missing}")
+PY
+is "every Application and AppProject that the charts render has the resources finalizer" "$?"
 
 agent="$work/incluster/pr-agent.yaml"
 for suffix in actor registration idle-suspend webhook metrics; do
