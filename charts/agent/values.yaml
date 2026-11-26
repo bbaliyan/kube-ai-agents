@@ -61,8 +61,12 @@ agent:
   dashboard:
     enabled: false
   metricsEnvironment: production
-  # The context length of the model server, in tokens. It must equal the setting on the server.
+  # The context length of the model server, in tokens. It must equal the setting on the server. It covers the input and
+  # the answer, and pr-agent keeps only 1000 to 1500 tokens of it free for the answer.
   contextLength: 16000
+  # Optional. The context length, in tokens, of a model whose length is not contextLength. The keys are `model` or names
+  # in `fallbackModels`. pr-agent then uses the limit of the model that it calls. Example: {openai/small: 32000}.
+  modelContextLengths: {}
   # pr-agent appends a run details section to each comment: the model, the tokens, the time and the model calls.
   runDetails: true
   # When whole files do not fit the context, the review is split into chunks, one model call each, and the results

@@ -58,14 +58,21 @@
   "protocol" $model.protocol
   "hostnames" (list $model.host)
   "ports" (list $model.port) -}}
+{{- /* One input limit for each model. pr-agent looks a model up in its table MAX_TOKENS first, and CUSTOM_MODEL_MAX_TOKENS covers every model that is not there. MAX_MODEL_TOKENS caps all of them, so it must hold the largest. */ -}}
+{{- $limits := $p.modelContextLengths | default dict -}}
+{{- $cap := int $p.contextLength -}}
+{{- range $name, $length := $limits }}
+{{- if not (has $name (concat (list $p.model) ($p.fallbackModels | default list))) }}{{ fail (printf "agent.modelContextLengths names %q, which is not agent.model or one of agent.fallbackModels" $name) }}{{ end -}}
+{{- $cap = max $cap (int $length) -}}
+{{- end -}}
 {{- /* The router reaches an actor on port 80 and ignores the Host port, so the app must listen there. */ -}}
 {{- $env := dict
   "PORT" "80"
   "CONFIG__GIT_PROVIDER" "gitlab"
   "CONFIG__MODEL" $p.model
   "CONFIG__FALLBACK_MODELS" ($p.fallbackModels | default list | toJson)
-  "CONFIG__CUSTOM_MODEL_MAX_TOKENS" ($p.contextLength | toString)
-  "CONFIG__MAX_MODEL_TOKENS" ($p.contextLength | toString)
+  "CONFIG__CUSTOM_MODEL_MAX_TOKENS" (int $p.contextLength | toString)
+  "CONFIG__MAX_MODEL_TOKENS" ($cap | toString)
   "CONFIG__DUPLICATE_PROMPT_EXAMPLES" "true"
   "GITLAB__URL" $p.gitlabUrl
   "GITLAB__AUTH_TYPE" "oauth_token"
@@ -160,11 +167,21 @@ its contents, which include this env.
 {{- $patch = regexReplaceAll `(?m)^[ \t]*#[^\n]*\n` (.Files.Get "files/actor_patch.py") "" -}}
 {{- $_ := set $env "OTEL_RESOURCE_ATTRIBUTES" (printf "ate.actor=%s/%s" $p.atespace $p.actorName) -}}
 {{- end -}}
+{{- /*
+pr-agent has one setting for the limit of a model that its table does not know, so two such models cannot have
+different limits. The command adds them to the table, before gunicorn starts the workers. Upstream gap in pr-agent
+v0.50.0: no setting for a limit of each model, and no upstream issue asks for one yet. Delete this when a release
+after v0.50.0 has the setting.
+*/ -}}
+{{- $limitPatch := "" -}}
+{{- if $limits }}{{ $limitPatch = printf "from pr_agent.algo import MAX_TOKENS; MAX_TOKENS.update(%s)\n" (toJson $limits) }}{{ end -}}
+{{- $script := printf "%s\n%s%s\n%s" `import functools, runpy, gitlab; gitlab.Gitlab.__init__ = functools.partialmethod(gitlab.Gitlab.__init__, keep_base_url=True)` $limitPatch $patch `runpy.run_module("gunicorn", run_name="__main__", alter_sys=True)` -}}
+{{- if gt (len $script) 4096 }}{{ fail (printf "the inline command of the actor has %d characters, and Agent Substrate refuses more than 4096. Use fewer entries in agent.modelContextLengths" (len $script)) }}{{ end -}}
 {{- $actor := dict
   "name" $p.actorName
   "atespace" $p.atespace
   "image" $p.image
-  "command" (list "python" "-c" (printf "%s\n%s\n%s" `import functools, runpy, gitlab; gitlab.Gitlab.__init__ = functools.partialmethod(gitlab.Gitlab.__init__, keep_base_url=True)` $patch `runpy.run_module("gunicorn", run_name="__main__", alter_sys=True)`))
+  "command" (list "python" "-c" $script)
   "args" (list "-k" "uvicorn_worker.UvicornWorker" "-c" "pr_agent/servers/gunicorn_config.py" "--forwarded-allow-ips" "*" "pr_agent.servers.gitlab_webhook:app")
   "env" $env
   "resources" (dict "cpuMillicores" $p.cpuMillicores "memoryBytes" $p.memoryBytes)

@@ -130,6 +130,13 @@
         "metricsEnvironment": {
           "type": "string"
         },
+        "modelContextLengths": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
         "contextLength": {
           "type": "integer",
           "minimum": 1
