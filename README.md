@@ -50,6 +50,26 @@ For an agent named `reviewer`, the Applications are `reviewer`, `reviewer-actor`
 
 The metrics collector uses fixed resource names in its namespace, so each agent needs its own namespace.
 
+## Removing the stack
+
+Every Application and project of the stack has the resources finalizer. When you delete the root Application with cascade, Argo CD deletes the Applications and what they made. The finalizer of a project keeps it until no Application uses it. Do not put your root Application in the project `ai-agents-stack`: the root and the project would wait for each other.
+
+The cascade stops the running actors, because it deletes the worker pool. It does not delete the control plane. The namespace `ate-system` is marked `Prune=false,Delete=false`, and the install Job creates the control plane outside Argo CD.
+
+To remove the control plane too, do these steps.
+
+> **Warning:** these steps delete the database of the control plane. You cannot undo this.
+
+1. Remove every agent from `agents` and let Argo CD sync.
+2. Delete the root Application with `argocd app delete <root> --cascade` or in the Argo CD UI. If the root has no finalizer, `kubectl delete` leaves its Applications behind.
+3. Wait until the Applications of the stack are gone.
+4. Delete the namespace with `kubectl delete namespace ate-system`.
+5. Delete the namespace `podcertificate-controller-system`.
+6. List the cluster-scoped objects with `kubectl get crd,clusterrole,clusterrolebinding,clustertrustbundle -o name`.
+7. Delete the CustomResourceDefinitions whose name ends in `.ate.dev`.
+8. Delete the ClusterRoles and bindings `ate-api-server`, `ate-controller`, `atelet` and `podcert-ate-dev-signer`.
+9. Delete the ClusterTrustBundles whose name contains `ate.dev`.
+
 ## Removing an agent
 
 Remove its entry from `agents`. Argo CD prunes the Applications of the agent (wave 1) before its project (wave -1), so the finalizers and the unregister hook still find the namespace permitted. Each Application of the agent has the resources finalizer, so Argo CD deletes the Applications and what they made. It does not delete the namespace of the agent (the consumer owns it). By default it does not unregister the actor, its templates or the atespace in Agent Substrate: they are rows in the control plane database, which a finalizer cannot reach. Set `agent.registration.unregister: true` to unregister them. The registration chart then runs an Argo CD PreDelete hook Job when its Application is deleted. The hook deletes the actor, its templates and the atespace if no other agent uses it. It needs a revision of `substrate.revision` that has `unregister.enabled`. If the hook fails or hangs, the sync of the parent waits for the Application to go, so the whole stack waits too. Delete the hook Job, or remove the finalizer of the Application, to go on. If you skip the finalizer, or leave the value off, delete them by hand with `kubectl ate delete actor`, `actor-template` and `atespace`.
