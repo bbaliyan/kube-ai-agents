@@ -137,6 +137,15 @@ is "a misspelled key of the metrics chart fails the schema" "$((1 - $?))"
 helm template policy "$repo/charts/substrate-credential-policy" --set 'agents[0].atespace=a' >/dev/null 2>&1
 is "an agent entry without a namespace fails the policy schema" "$((1 - $?))"
 
+for name in substrate-credential-policy substrate-workers; do
+  application "$stack" "$name" | grep -q 'resources-finalizer.argocd.argoproj.io'
+  is "removing the Application $name deletes what it made" "$?"
+done
+application "$parent" substrate | grep -q 'resources-finalizer.argocd.argoproj.io'
+is "removing the Application substrate deletes its Applications" "$?"
+! application "$stack" substrate-install | grep -q 'resources-finalizer.argocd.argoproj.io'
+is "the install has no resources finalizer, so a cascade cannot delete the control plane and its database" "$?"
+
 agent="$work/incluster/pr-agent.yaml"
 for suffix in actor registration idle-suspend webhook metrics; do
   grep -q "^  name: pr-agent-$suffix\$" "$agent"

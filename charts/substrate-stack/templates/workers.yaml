@@ -3,6 +3,9 @@ kind: Application
 metadata:
   name: substrate-workers
   namespace: argocd
+  finalizers:
+    # Deleting the Application deletes what it made. Without it, Argo CD leaves its objects behind.
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "2"
 spec:
