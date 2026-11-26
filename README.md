@@ -86,7 +86,9 @@ The charts need no other change: each agent project names the account for every 
 The account can do this:
 
 - In the namespace of the agent: manage the kinds that the charts of an agent make. It cannot read or write a Secret, and it cannot make a Role.
-- In the namespace of the control plane: make Roles and bindings, and change only the two of the agent. Their rules can give no more than the account holds: get the Service `api`, list Pods and forward a port to a Pod. It cannot make a Pod or read a Secret there.
+- In the namespace of the control plane: make Roles and bindings, and change only the two of the agent. Their rules can give no more than the account holds. That is: read the namespace and the Service `api`, list Pods, forward a port to a Pod, and manage the two Roles and bindings. It cannot make a Pod or read a Secret there.
+- A [ValidatingAdmissionPolicy](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/) limits the bindings that the account writes. They name one of the two Roles of the agent, and only service accounts of the namespace of the agent.
+- A second policy limits its Traefik routes to the Services and Middlewares of the route's own namespace.
 
 This limits the Applications of the agent, and a person whose rights in Argo CD end at the project of the agent. It does not limit the other Applications of the stack. They keep the account of the controller, and the install account in the control plane namespace is `cluster-admin`. A person who can change a source repository at the revision that you pin can change those too.
 
@@ -95,6 +97,8 @@ What stays open:
 - The account makes Deployments and Jobs in the namespace of the agent. A Pod there can mount any Secret of that namespace.
 - The account makes ExternalSecrets. A `ClusterSecretStore` without [namespace conditions](https://external-secrets.io/latest/api/clustersecretstore/) serves them too. Give each store the namespaces that can use it.
 - It can forward a port to any Pod of the control plane namespace, because the Jobs of an agent need that to reach the API.
+- A route can claim any host name and path, also one that another application serves.
+- The account can make Services of every type, and the policies do not look at what a Pod of the agent connects to. Limit that with NetworkPolicies.
 
 ## Removing an agent
 

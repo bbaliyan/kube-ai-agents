@@ -70,6 +70,11 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
 rules:
+  # Argo CD applies a Role with kubectl auth reconcile, which reads the namespace first.
+  - apiGroups: [""]
+    resources: [namespaces]
+    resourceNames: [{{ .Values.substrate.namespace }}]
+    verbs: [get]
   - apiGroups: [rbac.authorization.k8s.io]
     resources: [roles, rolebindings]
     verbs: [create]
@@ -104,4 +109,66 @@ subjects:
   - kind: ServiceAccount
     name: {{ $name }}
     namespace: argocd
+{{- end }}
+{{- $user := printf "system:serviceaccount:argocd:%s" $name }}
+{{- /* RBAC cannot say who a binding may name, or where a route may point. These two policies apply to this account only. */}}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}-bindings
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [rbac.authorization.k8s.io]
+        apiVersions: ["*"]
+        resources: [rolebindings]
+        operations: [CREATE, UPDATE]
+  matchConditions:
+    - name: the-deployment-account
+      expression: {{ printf "request.userInfo.username == '%s'" $user | quote }}
+  validations:
+    - expression: {{ printf "object.roleRef.kind == 'Role' && object.roleRef.name in %s" (toJson $controlPlaneRoles) | quote }}
+      message: the deployment account of an agent binds only the two Roles of the agent
+    - expression: {{ printf "has(object.subjects) && object.subjects.all(s, s.kind == 'ServiceAccount' && has(s.namespace) && s.namespace == '%s')" $namespace | quote }}
+      message: the deployment account of an agent binds only to service accounts of the namespace of the agent
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}-routes
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [traefik.io]
+        apiVersions: ["*"]
+        resources: [ingressroutes]
+        operations: [CREATE, UPDATE]
+  matchConditions:
+    - name: the-deployment-account
+      expression: {{ printf "request.userInfo.username == '%s'" $user | quote }}
+  validations:
+    # Only Services of the namespace of the route: no other namespace, and no TraefikService such as api@internal.
+    - expression: >-
+        object.spec.routes.all(r,
+        (!has(r.services) || r.services.all(s, (!has(s.kind) || s.kind == 'Service') && (!has(s.namespace) || s.namespace == object.metadata.namespace)))
+        && (!has(r.middlewares) || r.middlewares.all(m, !has(m.namespace) || m.namespace == object.metadata.namespace)))
+      message: a route of an agent uses only Services and Middlewares of its own namespace
+{{- range list "bindings" "routes" }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}-{{ . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: {{ $name }}-{{ . }}
+  validationActions: [Deny]
 {{- end }}

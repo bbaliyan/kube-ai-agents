@@ -341,6 +341,19 @@ for app in (d for d in tree if d["kind"] == "Application"):
                                 if not allows(rules, g, r, v, n):
                                     problems.append(f"{release}: Role {obj} grants {v} {r}, which the account does not hold")
 held = roles[plane]
+# Argo CD applies a Role with kubectl auth reconcile, which reads the namespace first. Without this, only a first install fails.
+if not allows(held, "", "namespaces", "get", plane):
+    problems.append(f"the account cannot get the namespace {plane}, so Argo CD cannot make a Role there")
+policies = {d["metadata"]["name"]: d["spec"] for d in tree if d["kind"] == "ValidatingAdmissionPolicy"}
+bound = {d["spec"]["policyName"] for d in tree if d["kind"] == "ValidatingAdmissionPolicyBinding" and d["spec"]["validationActions"] == ["Deny"]}
+user = f"request.userInfo.username == 'system:serviceaccount:argocd:{name}-deployer'"
+for policy, resource in ((f"{name}-deployer-bindings", "rolebindings"), (f"{name}-deployer-routes", "ingressroutes")):
+    spec = policies.get(policy)
+    if not spec or policy not in bound or spec["failurePolicy"] != "Fail" or spec["matchConditions"][0]["expression"] != user             or spec["matchConstraints"]["resourceRules"][0]["resources"] != [resource]:
+        problems.append(f"the policy {policy} is missing, not bound with Deny, or does not match the account and {resource}")
+own = next(d for d in parent if d["kind"] == "AppProject" and d["metadata"]["name"] == "ai-agent-" + name)
+if "argocd" in {d["namespace"] for d in own["spec"]["destinations"]}:
+    problems.append("the agent project reaches argocd, where its deployment account lives")
 for rule in held:
     if {"pods", "secrets", "serviceaccounts", "deployments", "jobs", "*"} & set(rule["resources"]) and set(rule["verbs"]) - {"list"}:
         problems.append(f"the account has too much in {plane}: {rule}")
