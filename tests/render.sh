@@ -345,7 +345,7 @@ for app in (d for d in tree if d["kind"] == "Application"):
         if doc["kind"] == "NetworkPolicy":
             network_policies.append(obj)
             peers = [p for r in doc["spec"].get("ingress", []) for p in r.get("from") or [None]]
-            if "egress" in doc["spec"] or not doc["spec"]["podSelector"].get("matchLabels") or not all(peers):
+            if "egress" in doc["spec"] or doc["spec"].get("policyTypes") != ["Ingress"] or doc["spec"]["podSelector"] != {"matchLabels": {"app.kubernetes.io/name": obj}} or not all(peers):
                 problems.append(f"{release}: the policy refuses the NetworkPolicy {obj}")
         resource = plural(doc["kind"])
         rules = roles.get(namespace, [])

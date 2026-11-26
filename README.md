@@ -132,7 +132,7 @@ Kubernetes lets an account write any Role within its own rights and name anyone 
 - Traefik routes: only `Host` with the host of `webhook.ingressRoute`, on its entry points, to Services of the namespace of the agent. A route has no priority, no Middleware and no TLS setting other than the name of a Secret. An agent without that route can make none.
 - Services: only `ClusterIP`, with no external IP.
 - ServiceMonitors: only Services of their own namespace, with no credential, proxy or change of the target address.
-- NetworkPolicies: only those of the shim and the metrics collector. They select named Pods, allow no outgoing traffic, and allow incoming traffic only from named senders. The account can still change the senders in them.
+- NetworkPolicies: only those of the shim and the metrics collector. Each one selects only the Pods that have its own name, covers only incoming traffic and allows it only from named senders. It does not limit outgoing traffic. The account can still change the senders in them, or delete them.
 
 **You must also enforce a Pod Security level on the namespace of each agent.** The account makes Deployments and Jobs there. Without this, a Pod can be privileged or mount the disk of its node, and that gives control of the cluster. The Pods of the charts pass the strictest level:
 
