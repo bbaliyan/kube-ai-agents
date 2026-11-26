@@ -16,7 +16,7 @@ You point one Argo CD Application at the chart `ai-agent` and list your agents i
 | `charts/pr-agent-webhook` | The GitLab webhook shim, an Envoy proxy. |
 | `charts/pr-agent-metrics` | An OpenTelemetry collector for the metrics of pr-agent. |
 
-The Applications `substrate` and one for each agent use the shared project `ai-agents-stack`. It allows this repository, the Agent Substrate repository, and the namespaces `argocd` and of the control plane. Each agent also has its own project, named `ai-agent-<name>`. The project allows the same repositories, the namespace of the agent and of the control plane, and no cluster-scoped kind. Every child Application of the agent uses that project. The parent passes its name to the `agent` chart in the value `project`.
+The Applications `substrate` and one for each agent use the shared project `ai-agents-stack`. It allows this repository, the Agent Substrate repository, and the namespaces `argocd`, of the control plane and of each agent. Each agent also has its own project, named `ai-agent-<name>`. The project allows the same repositories, the namespace of the agent and of the control plane, and no cluster-scoped kind. Every child Application of the agent uses that project. The parent passes its name to the `agent` chart in the value `project`.
 
 ## How it fits together
 
@@ -66,9 +66,55 @@ To remove the control plane too, do these steps.
 4. Delete the namespace with `kubectl delete namespace ate-system`.
 5. Delete the namespace `podcertificate-controller-system`.
 6. List the cluster-scoped objects with `kubectl get crd,clusterrole,clusterrolebinding,clustertrustbundle -o name`.
-7. Delete the CustomResourceDefinitions whose name ends in `.ate.dev`.
+7. Delete the CustomResourceDefinitions whose name ends in `.ate.dev`. If the stack made the stub `podmonitorings.monitoring.googleapis.com` (a cluster without the GKE operator), delete it too. Argo CD does not track a CustomResourceDefinition, so a cascade keeps it.
 8. Delete the ClusterRoles and bindings `ate-api-server`, `ate-controller`, `atelet` and `podcert-ate-dev-signer`.
 9. Delete the ClusterTrustBundles whose name contains `ate.dev`.
+
+## Deployment accounts
+
+By default, Argo CD deploys everything with the account of its controller, which can do anything in the cluster. With [application sync impersonation](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-sync-using-impersonation/), it deploys the Applications of an agent with the account `<agent>-deployer` in `argocd`. Kubernetes then enforces what they can make. The feature is beta in Argo CD.
+
+To turn it on, set these keys in the ConfigMap `argocd-cm`:
+
+```yaml
+application.sync.impersonation.enabled: "true"
+application.sync.impersonation.enforced: "false"
+```
+
+The charts need no other change: each agent project names the account for every destination. With `enforced: "false"`, a project that names no account keeps the account of the controller. With the default, `"true"`, the sync of every such project fails.
+
+The account can do this:
+
+- In the namespace of the agent: manage the kinds that the charts of an agent make. It cannot read or write a Secret, and it cannot make a Role.
+- In the namespace of the control plane: make Roles and bindings, and change only the two of the agent. Their rules can give no more than the account holds. That is: read the namespace and the Service `api`, list Pods, forward a port to a Pod, and manage the two Roles and bindings. It cannot make a Pod or read a Secret there.
+
+Kubernetes lets an account write any Role within its own rights and name anyone in a binding. RBAC also says nothing about what an object holds. Five [ValidatingAdmissionPolicies](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/) limit what the account writes:
+
+- Roles: only the two of the agent, with no other rules than reading the Service `api`, listing Pods and forwarding a port.
+- Bindings: only to those two Roles, and only for service accounts of the namespace of the agent.
+- Traefik routes: only `Host` with the host of `webhook.ingressRoute`, on its entry points, to Services of the namespace of the agent. A route has no priority, no Middleware and no TLS setting other than the name of a Secret. An agent without that route can make none.
+- Services: only `ClusterIP`, with no external IP.
+- ServiceMonitors: only Services of their own namespace, with no credential, proxy or change of the target address.
+
+**You must also enforce a Pod Security level on the namespace of each agent.** The account makes Deployments and Jobs there. Without this, a Pod can be privileged or mount the disk of its node, and that gives control of the cluster. The Pods of the charts pass the strictest level:
+
+```yaml
+metadata:
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+```
+
+This limits the Applications of the agent, and a person whose rights in Argo CD end at the project of the agent. It does not limit the other Applications of the stack. They keep the account of the controller, and the install account in the control plane namespace is `cluster-admin`. A person who can change a source repository at the revision that you pin can change those too.
+
+What stays open. This list holds what we found. It is not a proof that nothing else is open.
+
+- The account makes Deployments and Jobs in the namespace of the agent. A Pod there can mount any Secret of that namespace.
+- The account makes ExternalSecrets. A `ClusterSecretStore` without [namespace conditions](https://external-secrets.io/latest/api/clustersecretstore/) serves them too. Give each store the namespaces that can use it.
+- It can forward a port to any Pod of the control plane namespace, because the Jobs of an agent need that to reach the API.
+- The policies trust the host in `webhook.ingressRoute.host`. If another application serves that host, the route of the agent competes with it.
+- No policy limits what a Pod of the agent connects to. Limit that with NetworkPolicies.
+- A ServiceMonitor can keep the labels that its target sends (`honorLabels`) or rewrite them (`metricRelabelings`). An agent can then send series that look like those of another application. Prometheus also follows a redirect of its target to another HTTP address.
+- The account makes ConfigMaps. A component that reads labelled ConfigMaps of every namespace, such as a Grafana sidecar, reads these too. Limit it to the namespaces that you trust.
 
 ## Removing an agent
 

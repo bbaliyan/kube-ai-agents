@@ -1,0 +1,180 @@
+{{- /*
+The account that Argo CD deploys the Applications of this agent with, when application sync impersonation is on. The
+project of the agent names it for every destination. It lives in argocd, where no Application of the agent can make a
+Pod, so nothing that the agent deploys can run as it. The parent of the agent makes it before the Applications (wave -1)
+and Argo CD removes it after them, because their finalizers delete with this account too.
+*/ -}}
+{{- $name := printf "%s-deployer" .Values.agent.name -}}
+{{- $namespace := required "agent.namespace is required" .Values.agent.namespace -}}
+{{- /* The names that the charts substrate-registration and substrate-idle-suspend give their Role and RoleBinding. */ -}}
+{{- $controlPlaneRoles := list -}}
+{{- range list (list "registration" "substrate-registration") (list "idle-suspend" "substrate-idle-suspend") -}}
+{{- $release := printf "%s-%s" $.Values.agent.name (index . 0) -}}
+{{- $chart := index . 1 -}}
+{{- $full := ternary $release (printf "%s-%s" $release $chart) (contains $chart $release) -}}
+{{- $controlPlaneRoles = append $controlPlaneRoles ($full | trunc 40 | trimSuffix "-") -}}
+{{- end -}}
+{{- $manage := list "get" "list" "watch" "create" "update" "patch" "delete" -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+automountServiceAccountToken: false
+---
+# What the charts of an agent make in its own namespace. No Secrets, no Roles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ $namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: [""]
+    resources: [configmaps, serviceaccounts, services]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [batch]
+    resources: [cronjobs, jobs]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [external-secrets.io]
+    resources: [externalsecrets]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [generators.external-secrets.io]
+    resources: [passwords]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [monitoring.coreos.com]
+    resources: [servicemonitors]
+    verbs: {{ toJson $manage }}
+  - apiGroups: [traefik.io]
+    resources: [ingressroutes]
+    verbs: {{ toJson $manage }}
+---
+# In the namespace of the control plane an agent only makes the two Roles of its Jobs, and their bindings. Kubernetes
+# lets an account grant only what it holds, so it holds the three rules of those Roles and neither bind nor escalate.
+# It reads, changes and deletes only its own Roles. A rule that a chart adds to its Role must be added here too, or
+# the sync fails.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Values.substrate.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  # Argo CD applies a Role with kubectl auth reconcile, which reads the namespace first.
+  - apiGroups: [""]
+    resources: [namespaces]
+    resourceNames: [{{ .Values.substrate.namespace }}]
+    verbs: [get]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    verbs: [create]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    resourceNames: {{ toJson $controlPlaneRoles }}
+    verbs: [get, update, patch, delete]
+  - apiGroups: [""]
+    resources: [services]
+    resourceNames: [api]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list]
+  - apiGroups: [""]
+    resources: [pods/portforward]
+    verbs: [get, create]
+{{- range list $namespace .Values.substrate.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: argocd
+{{- end }}
+{{- $user := printf "system:serviceaccount:argocd:%s" $name }}
+{{- /*
+RBAC cannot say what a Role may hold within the rights of its writer, whom a binding may name, or where a route may
+point, and it cannot say what a Service or a ServiceMonitor may hold. The policies say it, for this account only. Each one allows the shape that the charts of an agent make, and no
+other. A chart that makes another shape needs a change here, or its sync fails.
+*/ -}}
+{{- /* The one route of an agent: the host of its webhook shim. Without that route, the account makes no route. */ -}}
+{{- $host := dig "ingressRoute" "host" "" (.Values.agent.webhook | default dict) -}}
+{{- if not (dig "ingressRoute" "enabled" false (.Values.agent.webhook | default dict)) }}{{ $host = "" }}{{ end -}}
+{{- if and $host (not (regexMatch `^[A-Za-z0-9.-]+$` $host)) }}{{ fail (printf "agent.webhook.ingressRoute.host must be a host name, got %q" $host) }}{{ end -}}
+{{- $entryPoints := dig "ingressRoute" "entryPoints" (list "websecure") (.Values.agent.webhook | default dict) -}}
+{{- $roleRules := "!has(object.rules) || object.rules.all(r, !has(r.nonResourceURLs) && has(r.apiGroups) && r.apiGroups == [''] && has(r.resources) && ((r.resources == ['services'] && has(r.resourceNames) && r.resourceNames == ['api'] && r.verbs.all(v, v == 'get')) || (r.resources == ['pods'] && r.verbs.all(v, v == 'list')) || (r.resources == ['pods/portforward'] && r.verbs.all(v, v in ['get', 'create']))))" -}}
+{{- $route := "false" -}}
+{{- if $host -}}
+{{- $route = printf "object.spec.routes.all(r, r.match == 'Host(`%s`)' && !has(r.priority) && !has(r.syntax) && !has(r.middlewares) && !has(r.observability) && has(r.services) && r.services.all(s, (!has(s.kind) || s.kind == 'Service') && (!has(s.namespace) || s.namespace == object.metadata.namespace) && !s.name.contains('@') && !has(s.middlewares) && !has(s.serversTransport)))" $host -}}
+{{- end -}}
+{{- $policies := list
+  (dict "name" "roles" "group" "rbac.authorization.k8s.io" "resource" "roles" "validations" (list
+    (dict "expression" (printf "object.metadata.name in %s" (toJson $controlPlaneRoles)) "message" "the deployment account of an agent writes only the two Roles of the agent")
+    (dict "expression" $roleRules "message" "a Role of an agent only reads the Service api, lists Pods and forwards a port")))
+  (dict "name" "bindings" "group" "rbac.authorization.k8s.io" "resource" "rolebindings" "validations" (list
+    (dict "expression" (printf "object.roleRef.kind == 'Role' && object.roleRef.name in %s" (toJson $controlPlaneRoles)) "message" "the deployment account of an agent binds only the two Roles of the agent")
+    (dict "expression" (printf "has(object.subjects) && object.subjects.all(s, s.kind == 'ServiceAccount' && has(s.namespace) && s.namespace == '%s')" $namespace) "message" "the deployment account of an agent binds only to service accounts of the namespace of the agent")))
+  (dict "name" "routes" "group" "traefik.io" "resource" "ingressroutes" "validations" (list
+    (dict "expression" $route "message" "a route of an agent matches only the host of its webhook, and uses only Services of its namespace")
+    (dict "expression" (printf "has(object.spec.entryPoints) && object.spec.entryPoints.all(e, e in %s)" (toJson $entryPoints)) "message" "a route of an agent uses only the entry points of its webhook")
+    (dict "expression" "!has(object.spec.parentRefs) && !has(object.spec.ingressClassName) && (!has(object.spec.tls) || (!has(object.spec.tls.options) && !has(object.spec.tls.store) && !has(object.spec.tls.certResolver) && !has(object.spec.tls.domains)))" "message" "a route of an agent has no parent route, class or TLS setting other than the name of a Secret")))
+  (dict "name" "services" "group" "" "resource" "services" "validations" (list
+    (dict "expression" "(!has(object.spec.type) || object.spec.type == 'ClusterIP') && !has(object.spec.externalIPs)" "message" "a Service of an agent is a ClusterIP Service with no external IP")))
+  (dict "name" "monitors" "group" "monitoring.coreos.com" "resource" "servicemonitors" "validations" (list
+    (dict "expression" "!has(object.spec.namespaceSelector) && !has(object.spec.attachMetadata) && !has(object.spec.scrapeClass)" "message" "a ServiceMonitor of an agent selects only Services of its own namespace")
+    (dict "expression" "!has(object.spec.endpoints) || object.spec.endpoints.all(e, !has(e.bearerTokenFile) && !has(e.bearerTokenSecret) && !has(e.authorization) && !has(e.basicAuth) && !has(e.oauth2) && !has(e.tlsConfig) && !has(e.proxyUrl) && !has(e.params) && !has(e.relabelings))" "message" "a ServiceMonitor of an agent sends no credential and changes no target address"))) -}}
+{{- $user := printf "system:serviceaccount:argocd:%s" $name }}
+{{- range $policies }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}-{{ .name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [{{ .group | quote }}]
+        apiVersions: ["*"]
+        resources: [{{ .resource }}]
+        operations: [CREATE, UPDATE]
+  matchConditions:
+    - name: the-deployment-account
+      expression: {{ printf "request.userInfo.username == '%s'" $user | quote }}
+  validations:
+    {{- range .validations }}
+    - expression: {{ .expression | quote }}
+      message: {{ .message }}
+    {{- end }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}-{{ .name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: {{ $name }}-{{ .name }}
+  validationActions: [Deny]
+{{- end }}

@@ -93,13 +93,13 @@ python3 - "$parent" <<'PY'
 import sys, yaml
 p = {d["metadata"]["name"]: d["spec"] for d in yaml.safe_load_all(open(sys.argv[1])) if d and d["kind"] == "AppProject"}
 assert sorted(p) == ["ai-agent-pr-agent", "ai-agents-stack"], sorted(p)
-assert [x["namespace"] for x in p["ai-agents-stack"]["destinations"]] == ["argocd", "ate-system"], p["ai-agents-stack"]["destinations"]
+assert [x["namespace"] for x in p["ai-agents-stack"]["destinations"]] == ["argocd", "ate-system", "pr-agent"], p["ai-agents-stack"]["destinations"]
 assert [x["namespace"] for x in p["ai-agent-pr-agent"]["destinations"]] == ["pr-agent", "ate-system"], p["ai-agent-pr-agent"]["destinations"]
 for k in ("sourceRepos", "namespaceResourceWhitelist"):
     assert p["ai-agent-pr-agent"][k] == p["ai-agents-stack"][k], k
 assert p["ai-agent-pr-agent"]["clusterResourceWhitelist"] == [], "an agent project allows no cluster-scoped kind"
 PY
-is "the shared project has no agent namespace, and each agent has its own project with its namespace and the control plane namespace, the same repositories and no cluster-scoped kind" "$?"
+is "the shared project reaches each agent namespace for the deployment account, and each agent has its own project with its namespace and the control plane namespace, the same repositories and no cluster-scoped kind" "$?"
 grep -A12 '^  clusterResourceWhitelist:' "$parent" | grep -q 'kind: CustomResourceDefinition' && grep -A12 '^  clusterResourceWhitelist:' "$parent" | grep -q 'kind: Namespace'
 is "the project allows the cluster-scoped kinds that the children make" "$?"
 [ "$(wave_of "$parent" Application substrate)" = 0 ] && [ "$(wave_of "$parent" Application pr-agent)" = 1 ] && [ "$(wave_of "$parent" AppProject ai-agents-stack)" = -1 ]
@@ -277,6 +277,122 @@ hosts="$(grep -ohE '(https?)://[A-Za-z0-9.-]+' "$external" | sed 's|^[a-z]*://||
 [ -n "$hosts" ] && ! grep -vE '(^|\.)(example\.test|github\.com)$|\.svc(\.cluster\.local)?$' <<<"$hosts" | grep -q .
 is "the external-gitlab example names only example hosts" "$?" "$hosts"
 
+# ---- the deployment account of an agent -------------------------------------------------------
+# With application sync impersonation on, this account is all that the Applications of an agent have.
+helm template d "$repo/charts/agent" -f "$repo/tests/values/agent/minimal.yaml" --show-only templates/deployer.yaml >"$work/deployer.yaml"
+python3 - "$parent" <<'PY'
+import sys, yaml
+docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d]
+projects = {d["metadata"]["name"]: d["spec"] for d in docs if d["kind"] == "AppProject"}
+agents = [d["metadata"]["name"] for d in docs if d["kind"] == "Application" and d["spec"]["source"]["path"] == "charts/agent"]
+stack = projects["ai-agents-stack"]
+ok = "destinationServiceAccounts" not in stack and agents
+for name in agents:
+    p = projects["ai-agent-" + name]
+    ok = ok and p["destinationServiceAccounts"] == [{"server": "*", "namespace": "*", "defaultServiceAccount": f"argocd:{name}-deployer"}]
+    ok = ok and {d["namespace"] for d in p["destinations"]} <= {d["namespace"] for d in stack["destinations"]}
+sys.exit(0 if ok else 1)
+PY
+is "each agent project names its deployment account for every destination, and the stack project can make that account's rights" "$?"
+
+# Everything that the local child charts of an agent make must be covered by the rights of the account, and the account
+# must hold every rule that a Role of an agent grants in the control plane namespace.
+python3 - "$incluster" "$work/routed.yaml" <<'PY'
+import sys, yaml
+values = yaml.safe_load(open(sys.argv[1]))
+values["agents"][0]["webhook"]["ingressRoute"] = {"enabled": True, "host": "review.example.test"}
+yaml.safe_dump(values, open(sys.argv[2], "w"))
+PY
+render_chain deploy "$work/routed.yaml"
+python3 - "$work/deploy" "$repo" <<'PY'
+import pathlib, subprocess, sys, yaml
+chain, repo = pathlib.Path(sys.argv[1]), sys.argv[2]
+parent = [d for d in yaml.safe_load_all(open(chain / "parent.yaml")) if d]
+agent = next(d for d in parent if d["kind"] == "Application" and d["spec"]["source"]["path"] == "charts/agent")
+name = agent["metadata"]["name"]
+values = chain / "agent-values.yaml"
+values.write_text(yaml.safe_dump(agent["spec"]["source"]["helm"]["valuesObject"]))
+render = lambda *a: [d for d in yaml.safe_load_all(subprocess.run(["helm", "template", *a], check=True, capture_output=True, text=True).stdout) if d]
+tree = render(name, f"{repo}/charts/agent", "-f", str(values))
+roles = {d["metadata"]["namespace"]: d["rules"] for d in tree if d["kind"] == "Role" and d["metadata"]["name"] == name + "-deployer"}
+agent_ns = agent["spec"]["source"]["helm"]["valuesObject"]["agent"]["namespace"]
+plane = "ate-system"
+plural = lambda kind: {"NetworkPolicy": "networkpolicies"}.get(kind, kind.lower() + "s")
+def allows(rules, group, resource, verb, obj=None):
+    return any(group in r["apiGroups"] and resource in r["resources"] and verb in r["verbs"] and (not r.get("resourceNames") or obj in r["resourceNames"]) for r in rules)
+problems, checked, routes = [], 0, []
+for app in (d for d in tree if d["kind"] == "Application"):
+    path = app["spec"]["source"]["path"]
+    if not pathlib.Path(repo, path).is_dir() or app["spec"]["source"]["repoURL"] != agent["spec"]["source"]["repoURL"]:
+        continue  # A chart of kube-agent-substrate. Its tests are there.
+    release = app["metadata"]["name"]
+    file = chain / (release + ".yaml")
+    file.write_text(yaml.safe_dump(app["spec"]["source"]["helm"].get("valuesObject", {})))
+    for doc in render(release, f"{repo}/{path}", "-n", app["spec"]["destination"]["namespace"], "-f", str(file)):
+        checked += 1
+        if doc["kind"] == "Service" and (doc["spec"].get("type", "ClusterIP") != "ClusterIP" or "externalIPs" in doc["spec"]):
+            problems.append(f"{release}: the policy refuses the Service {doc['metadata']['name']}")
+        if doc["kind"] == "ServiceMonitor":
+            extra = {"namespaceSelector", "attachMetadata", "scrapeClass"} & set(doc["spec"])
+            extra |= {"bearerTokenFile", "bearerTokenSecret", "authorization", "basicAuth", "oauth2", "tlsConfig", "proxyUrl", "params", "relabelings"} & {k for e in doc["spec"]["endpoints"] for k in e}
+            if extra:
+                problems.append(f"{release}: the policy refuses the ServiceMonitor fields {sorted(extra)}")
+        if doc["kind"] == "IngressRoute":
+            routes.extend((r["match"], doc["spec"]["entryPoints"]) for r in doc["spec"]["routes"])
+        group = doc["apiVersion"].rpartition("/")[0]
+        namespace = doc["metadata"].get("namespace") or app["spec"]["destination"]["namespace"]
+        obj = doc["metadata"]["name"]
+        resource = plural(doc["kind"])
+        rules = roles.get(namespace, [])
+        for verb in ("create", "patch", "delete") + (("get",) if namespace == plane else ()):
+            if not allows(rules, group, resource, verb, None if verb == "create" else obj):
+                problems.append(f"{release}: the account cannot {verb} {doc['kind']} {namespace}/{obj}")
+        if doc["kind"] == "Role" and namespace == plane:
+            for rule in doc["rules"]:
+                for g in rule["apiGroups"]:
+                    for r in rule["resources"]:
+                        for v in rule["verbs"]:
+                            for n in rule.get("resourceNames", [None]):
+                                if not allows(rules, g, r, v, n):
+                                    problems.append(f"{release}: Role {obj} grants {v} {r}, which the account does not hold")
+held = roles[plane]
+# Argo CD applies a Role with kubectl auth reconcile, which reads the namespace first. Without this, only a first install fails.
+if not allows(held, "", "namespaces", "get", plane):
+    problems.append(f"the account cannot get the namespace {plane}, so Argo CD cannot make a Role there")
+policies = {d["metadata"]["name"]: d["spec"] for d in tree if d["kind"] == "ValidatingAdmissionPolicy"}
+bound = {d["spec"]["policyName"] for d in tree if d["kind"] == "ValidatingAdmissionPolicyBinding" and d["spec"]["validationActions"] == ["Deny"]}
+user = f"request.userInfo.username == 'system:serviceaccount:argocd:{name}-deployer'"
+for policy, resource in ((f"{name}-deployer-roles", "roles"), (f"{name}-deployer-bindings", "rolebindings"), (f"{name}-deployer-routes", "ingressroutes"), (f"{name}-deployer-services", "services"), (f"{name}-deployer-monitors", "servicemonitors")):
+    spec = policies.get(policy)
+    if not spec or policy not in bound or spec["failurePolicy"] != "Fail" or spec["matchConditions"][0]["expression"] != user             or spec["matchConstraints"]["resourceRules"][0]["resources"] != [resource]:
+        problems.append(f"the policy {policy} is missing, not bound with Deny, or does not match the account and {resource}")
+allowed = [v["expression"] for v in policies.get(f"{name}-deployer-routes", {}).get("validations", [])]
+if not routes:
+    problems.append("the example renders no route, so the route policy is not compared with one")
+for match, entry_points in routes:
+    if not any(f"r.match == '{match}'" in e for e in allowed) or not any(all(f'"{p}"' in e for p in entry_points) for e in allowed):
+        problems.append(f"the route policy does not allow the route that the webhook chart makes: {match} {entry_points}")
+own = next(d for d in parent if d["kind"] == "AppProject" and d["metadata"]["name"] == "ai-agent-" + name)
+if "argocd" in {d["namespace"] for d in own["spec"]["destinations"]}:
+    problems.append("the agent project reaches argocd, where its deployment account lives")
+for rule in held:
+    if {"pods", "secrets", "serviceaccounts", "deployments", "jobs", "*"} & set(rule["resources"]) and set(rule["verbs"]) - {"list"}:
+        problems.append(f"the account has too much in {plane}: {rule}")
+    if {"bind", "escalate", "impersonate", "*"} & set(rule["verbs"]):
+        problems.append(f"the account can widen its rights: {rule}")
+if any("secrets" in r["resources"] or "*" in r["resources"] or "roles" in r["resources"] for r in roles[agent_ns]):
+    problems.append("the account can reach Secrets or Roles in the namespace of the agent")
+if not checked:
+    problems.append("no object of a child chart was checked")
+print("\n".join(sorted(set(problems))))
+sys.exit(1 if problems else 0)
+PY
+is "the deployment account covers what the child charts make, and holds no more in the control plane namespace than their Roles need" "$?"
+
+out="$(helm template d "$repo/charts/agent" -f "$repo/tests/values/agent/minimal.yaml" --set agent.webhook=null --show-only templates/deployer.yaml)"
+grep -q 'expression: "false"' <<<"$out"
+is "the account of an agent without a webhook route can make no route" "$?" "$out"
+
 # ---- what the parent refuses ----------------------------------------------------------
 refuse() { # name, expected error text, the agents block
   local file="$work/refuse.yaml" out
@@ -285,6 +401,8 @@ refuse() { # name, expected error text, the agents block
   [ $? -ne 0 ] && grep -q "$2" <<<"$out"
   is "$1" "$?" "$out"
 }
+refuse "an agent in the namespace of the control plane" "must not be argocd or the namespace of the control plane" 'agents: [{name: a, type: pr-agent, namespace: ate-system}]'
+refuse "an agent in the namespace of Argo CD" "must not be argocd or the namespace of the control plane" 'agents: [{name: argocd, type: pr-agent}]'
 addresses='modelEndpoint: "http://model.example.test:11434", gitlabUrl: "http://gitlab.example.test"'
 refuse "two agents with one name fail" 'two agents are named' "agents:
   - {name: same, type: pr-agent, $addresses}
