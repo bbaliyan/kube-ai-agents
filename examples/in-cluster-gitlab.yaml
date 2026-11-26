@@ -15,10 +15,22 @@ agents:
     gitlabUrl: http://gitlab.example.test
     webhook:
       port: 8080
+      # The labels of the GitLab Helm chart. Sidekiq sends webhooks, and the web service sends some, such
+      # as a test from the UI. Other installs use other labels, so check your Pods. A CI job that uses the
+      # pipeline route calls the shim from its own Pod, or through an ingress controller: add that sender too.
       allowFrom:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: gitlab
+          podSelector:
+            matchLabels:
+              app: sidekiq
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gitlab
+          podSelector:
+            matchLabels:
+              app: webservice
       pipeline:
         enabled: true
         issuer: https://gitlab.example.test

@@ -126,6 +126,10 @@ other. A chart that makes another shape needs a change here, or its sync fails.
 {{- if $host -}}
 {{- $route = printf "object.spec.routes.all(r, r.match == 'Host(`%s`)' && !has(r.priority) && !has(r.syntax) && !has(r.middlewares) && !has(r.observability) && has(r.services) && r.services.all(s, (!has(s.kind) || s.kind == 'Service') && (!has(s.namespace) || s.namespace == object.metadata.namespace) && !s.name.contains('@') && !has(s.middlewares) && !has(s.serversTransport)))" $host -}}
 {{- end -}}
+{{- /* Network policies add up, so one broad policy would undo the policy of the shim. */ -}}
+{{- $networkPolicies := list (printf "%s-webhook" .Values.agent.name) "pr-agent-metrics" -}}
+{{- $selects := "(!has(p.%[1]s) || (has(p.%[1]s.matchLabels) && size(p.%[1]s.matchLabels) > 0) || (has(p.%[1]s.matchExpressions) && size(p.%[1]s.matchExpressions) > 0))" -}}
+{{- $peers := printf "!has(object.spec.ingress) || object.spec.ingress.all(r, has(r.from) && size(r.from) > 0 && r.from.all(p, (has(p.ipBlock) ? !p.ipBlock.cidr.endsWith('/0') : has(p.podSelector) || has(p.namespaceSelector)) && %s && %s))" (printf $selects "podSelector") (printf $selects "namespaceSelector") -}}
 {{- $policies := list
   (dict "name" "roles" "group" "rbac.authorization.k8s.io" "resource" "roles" "validations" (list
     (dict "expression" (printf "object.metadata.name in %s" (toJson $controlPlaneRoles)) "message" "the deployment account of an agent writes only the two Roles of the agent")
@@ -141,7 +145,12 @@ other. A chart that makes another shape needs a change here, or its sync fails.
     (dict "expression" "(!has(object.spec.type) || object.spec.type == 'ClusterIP') && !has(object.spec.externalIPs)" "message" "a Service of an agent is a ClusterIP Service with no external IP")))
   (dict "name" "monitors" "group" "monitoring.coreos.com" "resource" "servicemonitors" "validations" (list
     (dict "expression" "!has(object.spec.namespaceSelector) && !has(object.spec.attachMetadata) && !has(object.spec.scrapeClass)" "message" "a ServiceMonitor of an agent selects only Services of its own namespace")
-    (dict "expression" "!has(object.spec.endpoints) || object.spec.endpoints.all(e, !has(e.bearerTokenFile) && !has(e.bearerTokenSecret) && !has(e.authorization) && !has(e.basicAuth) && !has(e.oauth2) && !has(e.tlsConfig) && !has(e.proxyUrl) && !has(e.params) && !has(e.relabelings))" "message" "a ServiceMonitor of an agent sends no credential and changes no target address"))) -}}
+    (dict "expression" "!has(object.spec.endpoints) || object.spec.endpoints.all(e, !has(e.bearerTokenFile) && !has(e.bearerTokenSecret) && !has(e.authorization) && !has(e.basicAuth) && !has(e.oauth2) && !has(e.tlsConfig) && !has(e.proxyUrl) && !has(e.params) && !has(e.relabelings))" "message" "a ServiceMonitor of an agent sends no credential and changes no target address")))
+  (dict "name" "networkpolicies" "group" "networking.k8s.io" "resource" "networkpolicies" "validations" (list
+    (dict "expression" (printf "object.metadata.name in %s" (toJson $networkPolicies)) "message" "the deployment account of an agent writes only the network policies of the shim and the metrics collector")
+    (dict "expression" "has(object.spec.podSelector.matchLabels) && object.spec.podSelector.matchLabels == {'app.kubernetes.io/name': object.metadata.name}" "message" "a network policy of an agent selects only the Pods that have its own name")
+    (dict "expression" "!has(object.spec.egress) && (!has(object.spec.policyTypes) || ('Ingress' in object.spec.policyTypes && !('Egress' in object.spec.policyTypes)))" "message" "a network policy of an agent covers only incoming traffic")
+    (dict "expression" $peers "message" "a network policy of an agent allows incoming traffic only from named senders"))) -}}
 {{- $user := printf "system:serviceaccount:argocd:%s" $name }}
 {{- range $policies }}
 ---

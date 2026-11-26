@@ -103,7 +103,7 @@ agent:
   cpuMillicores: 1000
   memoryBytes: 2147483648
   # The webhook shim, the chart charts/pr-agent-webhook. Empty means no shim. The keys are values of that chart,
-  # for example port, allowFrom and ingressRoute. {port: 8080} turns it on with the defaults. The consumer
+  # for example port, allowFrom and ingressRoute. A shim needs allowFrom, the senders that may call it. The consumer
   # passes the pipeline route (webhook.pipeline) in full: issuer, jwksUri and namespacePaths.
   webhook: {}
   # Extra values for the actor chart, which the registration chart does not read.

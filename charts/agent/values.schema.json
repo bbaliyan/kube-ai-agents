@@ -187,9 +187,7 @@
           "type": "integer",
           "minimum": 1
         },
-        "webhook": {
-          "type": "object"
-        },
+        "webhook": { "type": "object", "if": { "minProperties": 1 }, "then": { "required": ["allowFrom"], "properties": { "allowFrom": { "type": "array", "minItems": 1 } } } },
         "actorHelmValues": {
           "type": "object"
         },
