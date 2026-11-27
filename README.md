@@ -179,10 +179,11 @@ modelContextLengths:
 
 ## Long answers
 
-A proxy on the way to the model can close a connection that carries no data. A call that is not streamed carries none until the whole answer is ready. In Envoy, the default limit is 5 minutes, and pr-agent then logs `Connection error`. Set `modelStreaming: true` to stream the answer.
+A proxy on the way to the model can close a connection that carries no data. A call that is not streamed carries none until the whole answer is ready. In Envoy, the default limit is 5 minutes. The call then fails, for example with `Connection error`. Set `modelStreaming: true` to stream the answer.
 
 - The model server must send data while it works, its reasoning too. Streaming does not help with a server that is silent for longer than the limit.
-- With streaming, `modelTimeoutSeconds` limits the wait for the next data, not the whole call.
+- With streaming, `modelTimeoutSeconds` limits the wait for the next data, not the whole call. A server that keeps sending data has no time limit.
+- If a stream ends early without an error and without a finish reason, pr-agent keeps the part that it has. The answer can then be incomplete.
 - Only `openai/` models can use it.
 
 ## Many reviews at once

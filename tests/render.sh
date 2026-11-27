@@ -446,7 +446,7 @@ out="$(agent_chart --set agent.actorName=reviewer --show-only templates/actor.ya
 grep -q 'name: reviewer$' <<<"$out" && ! grep -q 'name: pr-agent$' <<<"$out"
 is "agent.actorName sets the name of the actor" "$?" "$out"
 out="$(agent_chart --set agent.model=openai/large --set agent.modelEndpoint=http://Model.example.test:4000/v1 --set agent.modelStreaming=true --show-only templates/actor.yaml)"
-grep -q 'LITELLM__CUSTOM_LLM_PROVIDER: openai$' <<<"$out" && grep -q 'LITELLM__FORCE_STREAMING_CUSTOM_LLM_PROVIDER: openai$' <<<"$out"   && grep -A1 'LITELLM__FORCE_STREAMING_API_BASE_SUBSTRINGS' <<<"$out" | grep -qF '["http://model.example.test:4000/v1"]'
+grep -q 'LITELLM__CUSTOM_LLM_PROVIDER: openai$' <<<"$out" && grep -q 'LITELLM__FORCE_STREAMING_CUSTOM_LLM_PROVIDER: openai$' <<<"$out" && grep -A1 'LITELLM__FORCE_STREAMING_API_BASE_SUBSTRINGS' <<<"$out" | grep -qF '["http://model.example.test:4000/v1"]'
 is "agent.modelStreaming sets the provider and the base URL that pr-agent streams for" "$?" "$out"
 ! grep -q 'LITELLM__' <<<"$(agent_chart --set agent.model=openai/large --show-only templates/actor.yaml)"
 is "without agent.modelStreaming the actor has no streaming setting" "$?"
