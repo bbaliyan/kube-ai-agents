@@ -144,6 +144,9 @@
         "runDetails": {
           "type": "boolean"
         },
+        "modelStreaming": {
+          "type": "boolean"
+        },
         "largeReviews": {
           "type": "boolean"
         },

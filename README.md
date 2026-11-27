@@ -177,6 +177,15 @@ modelContextLengths:
   openai/large-model: 128000
 ```
 
+## Long answers
+
+A proxy on the way to the model can close a connection that carries no data. A call that is not streamed carries none until the whole answer is ready. In Envoy, the default limit is 5 minutes. The call then fails, for example with `Connection error`. Set `modelStreaming: true` to stream the answer.
+
+- The model server must send data while it works, its reasoning too. Streaming does not help with a server that is silent for longer than the limit.
+- With streaming, `modelTimeoutSeconds` limits the wait for the next data, not the whole call. A server that keeps sending data has no time limit.
+- If a stream ends early without an error and without a finish reason, pr-agent keeps the part that it has. The answer can then be incomplete.
+- Only `openai/` models can use it.
+
 ## Many reviews at once
 
 pr-agent runs each command as a task on the event loop of a worker process, with no queue and no limit. A worker also does some blocking GitLab calls on that loop, so one busy worker answers new webhook calls slowly, and GitLab gives up on a call after 10 seconds. To handle more reviews at once, run more worker processes. pr-agent counts them from the CPUs of the actor, so size the actor with `cpuMillicores` and `memoryBytes` and leave `workers` unset: a 2 CPU actor gets 2 workers and a 4 CPU actor gets 4 (measured in the gVisor sandbox), up to 4. Set `maxWorkers` to raise that ceiling, or `workers` to force a number. Start with about 1 CPU and 1 GiB for each worker, and make the worker pool of Agent Substrate (`substrate.workers.cpu` and `memory`) about twice the size of the actor. The metrics carry the id of the worker, so the workers do not overwrite each other (see "Reporting a running command").

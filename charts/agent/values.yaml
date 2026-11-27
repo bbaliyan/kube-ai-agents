@@ -78,6 +78,11 @@ agent:
   # model at once and a failed connection is retried once, so a dead main model costs about this long. Without
   # fallbackModels, pr-agent retries the same model, so a hung call costs twice this long.
   modelTimeoutSeconds: 300
+  # true makes pr-agent stream the answer of the model. Set it when something on the way to the model closes a
+  # connection that carries no data, which cuts a long answer: by default, a proxy such as Envoy does that after 5
+  # minutes. It helps only if the model server sends data while it works. With streaming, modelTimeoutSeconds limits
+  # the wait for the next data, not the whole call. Only for openai/ models.
+  modelStreaming: false
   # The number of pr-agent worker processes in the actor. Each runs its own event loop, so more workers handle more
   # reviews at once. Leave it unset (null): pr-agent then picks max(2, CPUs of the actor), up to 4, and the CPUs
   # follow cpuMillicores (measured in the gVisor sandbox: a 2 CPU actor gets 2 workers, a 4 CPU actor gets 4).
