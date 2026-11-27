@@ -107,6 +107,13 @@
 {{- if $p.runDetails }}{{ $_ := set $env "CONFIG__OUTPUT_RUN_DETAILS" "true" }}{{ end -}}
 {{- $timeout := int $p.modelTimeoutSeconds -}}
 {{- $_ := set $env "CONFIG__AI_TIMEOUT" ($timeout | toString) -}}
+{{- /* pr-agent has no setting that only says "stream". It streams a call when the provider that is set and the base URL of the call both match, so all three settings are needed. */ -}}
+{{- if $p.modelStreaming }}
+{{- if ne (index (splitList "/" $p.model) 0) "openai" }}{{ fail (printf "agent.modelStreaming needs a model name that starts with openai/. Got %q" $p.model) }}{{ end -}}
+{{- $_ := set $env "LITELLM__CUSTOM_LLM_PROVIDER" "openai" -}}
+{{- $_ := set $env "LITELLM__FORCE_STREAMING_CUSTOM_LLM_PROVIDER" "openai" -}}
+{{- $_ := set $env "LITELLM__FORCE_STREAMING_API_BASE_SUBSTRINGS" (list (lower $p.modelEndpoint) | toJson) -}}
+{{- end -}}
 {{- /* Each gunicorn worker is one process with one event loop. Unset, pr-agent counts them from the CPUs of the actor. The metrics carry the id of the worker (actor_patch.py), so the workers do not overwrite each other. */ -}}
 {{- if not (kindIs "invalid" $p.workers) }}
 {{- $_ := set $env "GUNICORN_WORKERS" (int $p.workers | toString) -}}

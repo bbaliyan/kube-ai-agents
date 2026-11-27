@@ -445,6 +445,12 @@ is "the actor has the model, the model address, the context length and the defau
 out="$(agent_chart --set agent.actorName=reviewer --show-only templates/actor.yaml)"
 grep -q 'name: reviewer$' <<<"$out" && ! grep -q 'name: pr-agent$' <<<"$out"
 is "agent.actorName sets the name of the actor" "$?" "$out"
+out="$(agent_chart --set agent.model=openai/large --set agent.modelEndpoint=http://Model.example.test:4000/v1 --set agent.modelStreaming=true --show-only templates/actor.yaml)"
+grep -q 'LITELLM__CUSTOM_LLM_PROVIDER: openai$' <<<"$out" && grep -q 'LITELLM__FORCE_STREAMING_CUSTOM_LLM_PROVIDER: openai$' <<<"$out"   && grep -A1 'LITELLM__FORCE_STREAMING_API_BASE_SUBSTRINGS' <<<"$out" | grep -qF '["http://model.example.test:4000/v1"]'
+is "agent.modelStreaming sets the provider and the base URL that pr-agent streams for" "$?" "$out"
+! grep -q 'LITELLM__' <<<"$(agent_chart --set agent.model=openai/large --show-only templates/actor.yaml)"
+is "without agent.modelStreaming the actor has no streaming setting" "$?"
+agent_fails "streaming with a model that is not openai/ fails" 'agent.modelStreaming needs a model name' --set agent.modelStreaming=true
 grep -q 'CONFIG__OUTPUT_RUN_DETAILS' <<<"$(agent_chart --show-only templates/actor.yaml)" && ! grep -q 'CONFIG__OUTPUT_RUN_DETAILS' <<<"$(agent_chart --set agent.runDetails=false --show-only templates/actor.yaml)"
 is "agent.runDetails false leaves the run details setting out" "$?"
 ! grep -q 'OTEL__IS_ENABLED' <<<"$(agent_chart --show-only templates/actor.yaml)"
