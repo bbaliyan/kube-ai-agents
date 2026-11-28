@@ -100,6 +100,12 @@ agent:
   gitlabUrl: ""
   # More GitLab addresses that the actor may call, with the same token. An https address needs egressTrustBundle.
   gitlabExtraUrls: []
+  # Optional. The name of a GitLab project, without a path, for example pr-agent-settings. pr-agent reads the
+  # .pr_agent.toml of the project with this name in the top-level group of a merge request. Empty turns it off.
+  # See the README, "Shared settings".
+  globalSettingsRepo: ""
+  # true also reads the project with that name in the closest subgroup that has the file. It needs globalSettingsRepo.
+  useGroupSettingsFile: false
   # The webhook shim sends this fixed value in X-Gitlab-Token. The actor expects the same value. It is public and
   # is not the webhook secret.
   hopToken: internal-hop-from-the-webhook-shim
