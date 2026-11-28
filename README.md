@@ -177,6 +177,23 @@ modelContextLengths:
   openai/large-model: 128000
 ```
 
+## Shared settings
+
+pr-agent reads the file `.pr_agent.toml` from the default branch of each project. To set defaults for many projects in one place, set `globalSettingsRepo: pr-agent-settings`. Then:
+
+1. Make a project with that name directly in the top-level group.
+2. Add `.pr_agent.toml` to its default branch.
+3. Give the GitLab user of the token read access to the project.
+
+The file then applies to every project of the top-level group, those in subgroups too. The top-level group is the first part of the project path. Each top-level group needs its own settings project.
+
+With `useGroupSettingsFile: true`, a subgroup can have its own settings project with the same name. pr-agent reads the shared file of the top-level group, then the file of the closest subgroup that has one, then the file of the project. A later file wins. The files of other subgroups on the path are not read.
+
+- These are defaults, not rules. A project file or a comment can change many of them.
+- A change to a settings project changes the reviews of every project under its group. Limit who can push to its default branch. With `useGroupSettingsFile`, also limit who can make a project with that name in a subgroup.
+- pr-agent keeps the shared files for a short time, so a change does not apply at once.
+- If pr-agent cannot find or read a shared file, it goes on without it and shows no error in the merge request.
+
 ## Long answers
 
 A proxy on the way to the model can close a connection that carries no data. A call that is not streamed carries none until the whole answer is ready. In Envoy, the default limit is 5 minutes. The call then fails, for example with `Connection error`. Set `modelStreaming: true` to stream the answer.

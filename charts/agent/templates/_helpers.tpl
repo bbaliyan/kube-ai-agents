@@ -79,6 +79,9 @@
   "GITLAB__PERSONAL_ACCESS_TOKEN" "replaced-by-the-egress-proxy"
   "GITLAB__SHARED_SECRET" $p.hopToken -}}
 {{- $_ := set $env $provider.base $p.modelEndpoint -}}
+{{- if and $p.useGroupSettingsFile (not $p.globalSettingsRepo) }}{{ fail "agent.useGroupSettingsFile needs agent.globalSettingsRepo, the name of the settings project" }}{{ end -}}
+{{- if $p.globalSettingsRepo }}{{ $_ := set $env "CONFIG__GLOBAL_SETTINGS_REPO" $p.globalSettingsRepo }}{{ end -}}
+{{- if $p.useGroupSettingsFile }}{{ $_ := set $env "CONFIG__USE_GROUP_SETTINGS_FILE" "true" }}{{ end -}}
 {{- /* Metrics: pr-agent pushes its OpenTelemetry counters (commands, tokens, model calls) over OTLP/HTTP to a collector. With agent.metricsCollector.enabled the collector is the chart pr-agent-metrics. The egress proxy adds the bearer token of agent.metricsApiKeySecret, so the actor never holds it. */ -}}
 {{- $metricsEndpoint := $p.metricsEndpoint -}}
 {{- if and $p.metricsCollector.enabled (not $metricsEndpoint) }}{{ $metricsEndpoint = printf "http://pr-agent-metrics.%s.svc.cluster.local:4318" $p.namespace }}{{ end -}}

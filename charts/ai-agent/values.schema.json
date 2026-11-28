@@ -189,6 +189,13 @@
         "gitlabUrl": {
           "type": "string"
         },
+        "globalSettingsRepo": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]*$"
+        },
+        "useGroupSettingsFile": {
+          "type": "boolean"
+        },
         "gitlabExtraUrls": {
           "type": "array",
           "items": {

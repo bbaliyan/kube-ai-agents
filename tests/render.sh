@@ -451,6 +451,13 @@ is "agent.modelStreaming sets the provider and the base URL that pr-agent stream
 ! grep -q 'LITELLM__' <<<"$(agent_chart --set agent.model=openai/large --show-only templates/actor.yaml)"
 is "without agent.modelStreaming the actor has no streaming setting" "$?"
 agent_fails "streaming with a model that is not openai/ fails" 'agent.modelStreaming needs a model name' --set agent.modelStreaming=true
+out="$(agent_chart --set agent.globalSettingsRepo=pr-agent-settings --set agent.useGroupSettingsFile=true --show-only templates/actor.yaml)"
+grep -q 'CONFIG__GLOBAL_SETTINGS_REPO: pr-agent-settings$' <<<"$out" && grep -qE 'CONFIG__USE_GROUP_SETTINGS_FILE: .?true.?$' <<<"$out"
+is "agent.globalSettingsRepo and agent.useGroupSettingsFile turn on the shared settings" "$?" "$out"
+! grep -qE 'CONFIG__(GLOBAL_SETTINGS_REPO|USE_GROUP_SETTINGS_FILE)' <<<"$(agent_chart --show-only templates/actor.yaml)"
+is "by default the actor has no shared settings" "$?"
+agent_fails "subgroup settings without a settings project fail" 'agent.useGroupSettingsFile needs agent.globalSettingsRepo' --set agent.useGroupSettingsFile=true
+agent_fails "a settings project with a path fails" 'globalSettingsRepo' --set agent.globalSettingsRepo=group/pr-agent-settings
 grep -q 'CONFIG__OUTPUT_RUN_DETAILS' <<<"$(agent_chart --show-only templates/actor.yaml)" && ! grep -q 'CONFIG__OUTPUT_RUN_DETAILS' <<<"$(agent_chart --set agent.runDetails=false --show-only templates/actor.yaml)"
 is "agent.runDetails false leaves the run details setting out" "$?"
 ! grep -q 'OTEL__IS_ENABLED' <<<"$(agent_chart --show-only templates/actor.yaml)"
